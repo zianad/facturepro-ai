@@ -1,29 +1,31 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🧾%3C/text%3E%3C/svg%3E" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Intelligent Invoice Generator02</title>
-    
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Local environment variables for development -->
-    <!-- This file is not committed to git and must be created from env.example.js -->
-    <script src="env.js"></script>
-    
     <script type="importmap">
     {
       "imports": {
-        "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.3",
-        "react/": "https://aistudiocdn.com/react@^19.1.1/",
         "react": "https://aistudiocdn.com/react@^19.1.1",
-        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0",
         "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+        "react/": "https://aistudiocdn.com/react@^19.1.1/",
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0",
+        "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.3",
         "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5"
       }
     }
     </script>
+    
+    <!-- This script is for local development to load the API_KEY -->
+    <!-- It should be created from env.example.js -->
+    <script src="/env.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
   </head>
   <body class="bg-gray-50">
     <div id="root"></div>

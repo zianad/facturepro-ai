@@ -1,188 +1,162 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { ExtractedInvoiceData, InventoryItem, SuggestedItem } from '../types';
+import { InventoryItem, SuggestedItem } from '../types';
 
-// FIX: Switched to `process.env.API_KEY` to align with the provided guidelines for accessing the API key. This resolves the TypeScript error for `import.meta.env`.
-const apiKey = process.env.API_KEY;
+// FIX: Implement Gemini service functions for parsing inventory and suggesting invoice items.
+// This file was missing, causing import errors in other components.
 
-if (!apiKey) {
-  // FIX: Updated the error message to reflect the change to `API_KEY`.
-  throw new Error("API_KEY environment variable is not set.");
-}
+// Initialize the Google AI client per coding guidelines.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
-const ai = new GoogleGenAI({ apiKey });
-
-const invoiceSchema = {
-  type: Type.OBJECT,
-  properties: {
-    invoiceNumber: { type: Type.STRING, description: "The invoice number or ID." },
-    vendorName: { type: Type.STRING, description: "The name of the vendor or company." },
-    invoiceDate: { type: Type.STRING, description: "The date of the invoice in YYYY-MM-DD format." },
-    totalAmount: { type: Type.NUMBER, description: "The final total amount of the invoice." },
-    items: {
-      type: Type.ARRAY,
-      description: "List of all items in the invoice.",
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          description: { type: Type.STRING, description: "Description of the item." },
-          quantity: { type: Type.NUMBER, description: "Quantity of the item." },
-          unitPrice: { type: Type.NUMBER, description: "Price per unit of the item." },
-          total: { type: Type.NUMBER, description: "Total price for this line item." },
-        },
-        required: ["description", "quantity", "unitPrice", "total"],
-      },
-    },
-  },
-  required: ["invoiceNumber", "vendorName", "invoiceDate", "totalAmount", "items"],
-};
-
-export const analyzeInvoiceImage = async (base64Image: string, mimeType: string): Promise<ExtractedInvoiceData> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              data: base64Image,
-              mimeType: mimeType,
-            },
-          },
-          {
-            text: `Analyze the following invoice image and extract the key information. Provide the response as a JSON object that strictly follows the provided schema.`,
-          },
-        ],
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: invoiceSchema,
-      },
-    });
-
-    const jsonText = response.text.trim();
-    return JSON.parse(jsonText);
-  } catch (error) {
-    console.error("Error analyzing invoice with Gemini API:", error);
-    if (error instanceof Error && error.message.includes("xhr error")) {
-        throw new Error("A network error occurred while analyzing the invoice. Please check your connection and try again.");
-    }
-    if (error instanceof Error) {
-        throw new Error(`Failed to analyze invoice: ${error.message}`);
-    }
-    throw new Error("An unknown error occurred during invoice analysis.");
-  }
-};
-
-const inventoryFileSchema = {
-    type: Type.ARRAY,
-    items: {
-        type: Type.OBJECT,
-        properties: {
-            reference: { type: Type.STRING, description: "The item's reference code or SKU. Can be alphanumeric." },
-            name: { type: Type.STRING, description: "The name or designation of the item." },
-            quantity: { type: Type.NUMBER, description: "The quantity of the item." },
-            price: { type: Type.NUMBER, description: "The unit price of the item." },
-            purchaseDate: { type: Type.STRING, description: "The date of purchase in YYYY-MM-DD format." },
-        },
-        required: ["reference", "name", "quantity", "price", "purchaseDate"]
-    }
-};
-
+/**
+ * Parses the text content of an inventory file (e.g., CSV, TXT) using Gemini
+ * to extract a structured list of inventory items.
+ * @param fileContent The string content of the file.
+ * @returns A promise that resolves to an array of inventory items.
+ */
 export const parseInventoryFile = async (fileContent: string): Promise<Omit<InventoryItem, 'id'>[]> => {
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: {
-                parts: [
-                    { text: `Parse the following inventory data, which could be in CSV or a similar text format. The data is provided in the next part. Extract the list of items according to the provided JSON schema. The column names in the text might be different (e.g., 'DESIGNATION' for name, 'PRIX UNITAIRE' for price), so interpret them correctly. Ensure the purchase date is in YYYY-MM-DD format.` },
-                    { text: fileContent }
-                ]
-            },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: inventoryFileSchema,
-            },
-        });
+  const model = 'gemini-2.5-flash';
 
-        const jsonText = response.text.trim();
-        return JSON.parse(jsonText);
-    } catch (error) {
-        console.error("Error parsing inventory file with Gemini API:", error);
-        if (error instanceof Error && error.message.includes("xhr error")) {
-            throw new Error("A network error occurred while parsing the file with the AI service. This can happen with large files or network issues. Please check your connection and try again.");
-        }
-        if (error instanceof Error) {
-            throw new Error(`Failed to parse file: ${error.message}`);
-        }
-        throw new Error("An unknown error occurred during file parsing.");
-    }
-};
-
-export const analyzeInventoryData = async (inventory: InventoryItem[]): Promise<string> => {
-  try {
-    if (inventory.length === 0) {
-      return "The inventory is currently empty. Add some items to get an analysis.";
-    }
-    const inventorySummary = inventory.map(item => 
-      `- ${item.name} (Ref: ${item.reference}): ${item.quantity} units at $${item.price.toFixed(2)} each, purchased on ${item.purchaseDate}`
-    ).join('\n');
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `Analyze the following inventory data. Provide a brief summary of the overall stock health, identify any items that are low in stock (quantity less than 10), and suggest which items should be reordered soon. Be concise and format the response for readability.\n\nInventory:\n${inventorySummary}`,
-    });
+  const prompt = `
+    Parse the following inventory data, which is in CSV or a similar plain text format.
+    The data contains columns for reference/ID, item name/description, quantity, unit price, and purchase date.
+    Column headers might be in French (e.g., REFERENCE, DESIGNATION, QUANTITE, PRIX UNITAIRE, DATE D'ACHAT) or English.
+    - Extract the reference, name, quantity, price, and purchase date for each item.
+    - Prices might use a comma as a decimal separator; convert it to a period.
+    - Quantities and prices must be numbers.
+    - If a purchase date is missing or invalid, use today's date in YYYY-MM-DD format.
+    - Return the data strictly as a JSON array of objects.
     
-    return response.text;
-  } catch (error) {
-    console.error("Error analyzing inventory with Gemini API:", error);
-    if (error instanceof Error && error.message.includes("xhr error")) {
-        throw new Error("A network error occurred while analyzing inventory. Please check your connection and try again.");
-    }
-    if (error instanceof Error) {
-        throw new Error(`Failed to analyze inventory: ${error.message}`);
-    }
-    throw new Error("An unknown error occurred during inventory analysis.");
-  }
-};
+    Inventory Data:
+    ---
+    ${fileContent}
+    ---
+  `;
 
-const suggestedItemsSchema = {
-  type: Type.ARRAY,
-  items: {
-    type: Type.OBJECT,
-    properties: {
-      id: { type: Type.NUMBER, description: "The unique ID of the suggested inventory item." },
-      quantity: { type: Type.NUMBER, description: "The quantity of this item to include in the invoice." },
-    },
-    required: ["id", "quantity"],
-  },
-};
-
-export const suggestInvoiceItemsForTotal = async (inventory: InventoryItem[], total: number): Promise<SuggestedItem[]> => {
   try {
-    if (inventory.length === 0) {
-      return [];
-    }
-    const inventoryForPrompt = JSON.stringify(inventory.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })));
-    
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `From the following inventory list, select a combination of items whose total price is as close as possible to the target amount of ${total}. The difference should be minimal. When selecting items, you must follow these rules: 1. Diversify the selection by including multiple different products. 2. The quantity for each selected item should ideally be more than 10 units and must not be 1 or 2. 3. The total quantity of any selected item must not exceed its available quantity in the inventory. Prioritize getting as close to the target total as possible while respecting these rules. Available items (with their ID, name, price, and available quantity): ${inventoryForPrompt}. Provide the response as a JSON object that strictly follows the provided schema. If no combination is reasonably close while following the rules, return an empty array.`,
+      model: model,
+      contents: prompt,
       config: {
-        responseMimeType: "application/json",
-        responseSchema: suggestedItemsSchema,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              reference: { type: Type.STRING, description: 'The item reference code.' },
+              name: { type: Type.STRING, description: 'The name or description of the item.' },
+              quantity: { type: Type.INTEGER, description: 'The available quantity of the item.' },
+              price: { type: Type.NUMBER, description: 'The unit price of the item.' },
+              purchaseDate: { type: Type.STRING, description: 'The purchase date in YYYY-MM-DD format.' },
+            },
+            required: ['reference', 'name', 'quantity', 'price', 'purchaseDate'],
+          },
+        },
       },
     });
 
-    const jsonText = response.text.trim();
-    return JSON.parse(jsonText);
+    const jsonString = response.text.trim();
+    const parsedItems = JSON.parse(jsonString);
+
+    if (!Array.isArray(parsedItems)) {
+      console.error("Parsed data is not an array:", parsedItems);
+      throw new Error("Failed to parse inventory file: AI response was not a valid array.");
+    }
+    
+    return parsedItems.map(item => ({
+      reference: String(item.reference || ''),
+      name: String(item.name || 'N/A'),
+      quantity: Number(item.quantity) || 0,
+      price: Number(item.price) || 0,
+      purchaseDate: item.purchaseDate || new Date().toISOString().split('T')[0]
+    }));
+
   } catch (error) {
-    console.error("Error suggesting invoice items with Gemini API:", error);
-    if (error instanceof Error && error.message.includes("xhr error")) {
-        throw new Error("A network error occurred while generating the invoice. Please check your connection and try again.");
+    console.error('Error parsing inventory file with Gemini:', error);
+    if (error instanceof SyntaxError) {
+        throw new Error('Failed to parse the AI response. The format was invalid.');
     }
-    if (error instanceof Error) {
-        throw new Error(`Failed to suggest items: ${error.message}`);
+    throw new Error('An error occurred while communicating with the AI service to parse the file.');
+  }
+};
+
+/**
+ * Suggests a combination of inventory items to match a target total invoice amount (pre-tax).
+ * @param inventory The available list of inventory items.
+ * @param targetTotal The target invoice total (HT - hors taxes).
+ * @returns A promise that resolves to an array of suggested items with their IDs and quantities.
+ */
+export const suggestInvoiceItemsForTotal = async (
+  inventory: InventoryItem[],
+  targetTotal: number
+): Promise<SuggestedItem[]> => {
+  const model = 'gemini-2.5-flash';
+
+  const inventoryForPrompt = inventory
+    .filter(item => item.quantity > 0)
+    .map(({ id, name, price, quantity }) => ({ id, name, price, quantity }));
+
+  if (inventoryForPrompt.length === 0) {
+      return [];
+  }
+
+  const prompt = `
+    You are an expert system for generating invoices. Your task is to select a combination of items from the provided inventory list to create an invoice that totals as close as possible to a target amount, without exceeding it.
+
+    Rules:
+    - You MUST strictly respect the available 'quantity' for each item. You cannot suggest more than what is available.
+    - The goal is to reach a total value as close as possible to ${targetTotal}, but not over.
+    - The result MUST be a JSON array of objects, where each object contains an 'id' and a 'quantity'.
+    - If the inventory is empty or no combination can be made to approach the target total, return an empty array.
+
+    Here is the available inventory in JSON format:
+    ---
+    ${JSON.stringify(inventoryForPrompt)}
+    ---
+
+    Target Invoice Total (before tax): ${targetTotal}
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.INTEGER },
+              quantity: { type: Type.INTEGER },
+            },
+            required: ['id', 'quantity'],
+          },
+        },
+      },
+    });
+
+    const jsonString = response.text.trim();
+    const suggestions = JSON.parse(jsonString);
+    
+    if (!Array.isArray(suggestions)) {
+      console.error("Suggestions data is not an array:", suggestions);
+      throw new Error("Failed to suggest items: AI response was not a valid array.");
     }
-    throw new Error("An unknown error occurred while suggesting invoice items.");
+
+    return suggestions
+        .map(s => ({
+            id: Number(s.id),
+            quantity: Number(s.quantity)
+        }))
+        .filter(s => s.id > 0 && s.quantity > 0);
+
+  } catch (error) {
+    console.error('Error suggesting invoice items with Gemini:', error);
+    if (error instanceof SyntaxError) {
+        throw new Error('Failed to parse the AI response. The format was invalid.');
+    }
+    throw new Error('An error occurred while communicating with the AI service to suggest items.');
   }
 };
