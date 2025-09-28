@@ -1,0 +1,58 @@
+// FIX: Define and export the User interface. Remove circular self-import.
+export interface User {
+  username: string;
+  role: 'admin' | 'user';
+}
+
+export interface ProfileData {
+  id: number; // Static key, e.g., 1
+  userName: string;
+  companyName: string;
+  companyICE: string;
+  companyAddress: string;
+  companyPhone: string;
+}
+
+export interface InventoryItem {
+  id: number;
+  reference: string;
+  name: string;
+  quantity: number;
+  price: number;
+  purchaseDate: string; // YYYY-MM-DD
+}
+
+export interface InvoiceItem {
+  reference: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+export interface GeneratedInvoice {
+  id: number;
+  invoiceNumber: string;
+  customerName: string;
+  invoiceDate: string; // YYYY-MM-DD
+  totalAmount: number;
+  items: InvoiceItem[];
+}
+
+export interface ExtractedInvoiceData {
+  invoiceNumber: string;
+  vendorName: string;
+  invoiceDate: string; // YYYY-MM-DD
+  totalAmount: number;
+  items: {
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }[];
+}
+
+export interface SuggestedItem {
+    id: number;
+    quantity: number;
+}
