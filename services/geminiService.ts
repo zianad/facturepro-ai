@@ -1,11 +1,30 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { InventoryItem, SuggestedItem } from '../types';
 
-// FIX: Implement Gemini service functions for parsing inventory and suggesting invoice items.
-// This file was missing, causing import errors in other components.
+// Singleton instance of the GoogleGenAI client.
+let aiInstance: GoogleGenAI | null = null;
 
-// Initialize the Google AI client per coding guidelines.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+/**
+ * Lazily initializes and returns the GoogleGenAI client.
+ * Throws a user-friendly error if the API key is not configured.
+ */
+const getAiClient = (): GoogleGenAI => {
+    if (aiInstance) {
+        return aiInstance;
+    }
+
+    // Access the API key from the global object configured by env.js
+    const apiKey = (window as any).process?.env?.API_KEY;
+
+    if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE") {
+        throw new Error(
+            "Gemini API key not configured. Please create `env.js` from `env.example.js` and add your key."
+        );
+    }
+
+    aiInstance = new GoogleGenAI({ apiKey });
+    return aiInstance;
+};
 
 /**
  * Parses the text content of an inventory file (e.g., CSV, TXT) using Gemini
@@ -15,6 +34,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
  */
 export const parseInventoryFile = async (fileContent: string): Promise<Omit<InventoryItem, 'id'>[]> => {
   const model = 'gemini-2.5-flash';
+  const ai = getAiClient(); // Get client on-demand
 
   const prompt = `
     Parse the following inventory data, which is in CSV or a similar plain text format.
@@ -73,6 +93,10 @@ export const parseInventoryFile = async (fileContent: string): Promise<Omit<Inve
 
   } catch (error) {
     console.error('Error parsing inventory file with Gemini:', error);
+    // Re-throw the specific error from getAiClient or a generic one.
+    if (error instanceof Error && error.message.startsWith("Gemini API key")) {
+        throw error;
+    }
     if (error instanceof SyntaxError) {
         throw new Error('Failed to parse the AI response. The format was invalid.');
     }
@@ -91,6 +115,7 @@ export const suggestInvoiceItemsForTotal = async (
   targetTotal: number
 ): Promise<SuggestedItem[]> => {
   const model = 'gemini-2.5-flash';
+  const ai = getAiClient(); // Get client on-demand
 
   const inventoryForPrompt = inventory
     .filter(item => item.quantity > 0)
@@ -106,6 +131,7 @@ export const suggestInvoiceItemsForTotal = async (
     Rules:
     - You MUST strictly respect the available 'quantity' for each item. You cannot suggest more than what is available.
     - The goal is to reach a total value as close as possible to ${targetTotal}, but not over.
+    - To make invoices more realistic, prioritize using a variety of items and quantities greater than two, ideally more than ten if possible, rather than many items with a quantity of one.
     - The result MUST be a JSON array of objects, where each object contains an 'id' and a 'quantity'.
     - If the inventory is empty or no combination can be made to approach the target total, return an empty array.
 
@@ -154,6 +180,10 @@ export const suggestInvoiceItemsForTotal = async (
 
   } catch (error) {
     console.error('Error suggesting invoice items with Gemini:', error);
+    // Re-throw the specific error from getAiClient or a generic one.
+    if (error instanceof Error && error.message.startsWith("Gemini API key")) {
+        throw error;
+    }
     if (error instanceof SyntaxError) {
         throw new Error('Failed to parse the AI response. The format was invalid.');
     }
