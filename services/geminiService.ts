@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { InventoryItem, SuggestedItem } from '../types';
 
@@ -13,8 +14,11 @@ const getAiClient = (): GoogleGenAI => {
         return aiInstance;
     }
 
-    // Access the API key from the global object configured by env.js
-    const apiKey = (window as any).process?.env?.API_KEY;
+    // In a Vite project, environment variables exposed to the client
+    // MUST be prefixed with VITE_. Vercel injects this into import.meta.env.
+    // The local setup uses `window.process.env` via env.js.
+    // FIX: Cast `import.meta` to `any` to address TypeScript error about missing 'env' property.
+    const apiKey = (import.meta as any).env.VITE_API_KEY || (window as any).process?.env?.VITE_API_KEY;
 
     if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE") {
         throw new Error(
