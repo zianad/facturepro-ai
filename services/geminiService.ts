@@ -13,13 +13,16 @@ const getAiClient = (): GoogleGenAI => {
         return aiInstance;
     }
 
-    // FIX: Changed API key retrieval to use process.env.API_KEY as per coding guidelines,
-    // which also resolves the TypeScript error on 'import.meta.env'.
-    const apiKey = process.env.API_KEY;
+    // DEFINITIVE FIX: Use `import.meta.env.VITE_API_KEY`.
+    // This is the standard and secure way to access environment variables
+    // in a client-side application built with Vite (which Vercel uses).
+    // The `VITE_` prefix is required by the build tool.
+    // FIX: Correctly cast `import.meta` to `any` to access the `env` property injected by Vite.
+    const apiKey = (import.meta as any).env.VITE_API_KEY;
 
     if (!apiKey) {
         throw new Error(
-            "Gemini API key not configured. Please ensure the API_KEY environment variable is set in your deployment settings."
+            "Gemini API key not configured. Please ensure the 'VITE_API_KEY' environment variable is set in your deployment settings."
         );
     }
 
