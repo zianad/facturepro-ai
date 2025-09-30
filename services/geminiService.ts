@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { InventoryItem, SuggestedItem } from '../types';
 
@@ -14,7 +13,8 @@ const getAiClient = (): GoogleGenAI => {
         return aiInstance;
     }
 
-    // The API key is expected to be available in the execution environment.
+    // FIX: Adhere to Gemini API guidelines by using process.env.API_KEY and fix TypeScript error.
+    // Assumes the execution environment makes this variable available.
     const apiKey = process.env.API_KEY;
 
     if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE") {
