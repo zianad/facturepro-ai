@@ -15,8 +15,7 @@ const getAiClient = (): GoogleGenAI => {
     }
 
     // The API key is expected to be available in the execution environment.
-    // For local development, this is polyfilled by `env.js`.
-    const apiKey = (window as any).process?.env?.API_KEY;
+    const apiKey = process.env.API_KEY;
 
     if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE") {
         throw new Error(
