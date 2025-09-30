@@ -13,13 +13,13 @@ const getAiClient = (): GoogleGenAI => {
         return aiInstance;
     }
 
-    // FIX: Per @google/genai guidelines, the API key must be obtained from process.env.API_KEY.
-    // This change also resolves the TypeScript error on the original line: "Property 'env' does not exist on type 'ImportMeta'".
+    // FIX: Changed API key retrieval to use process.env.API_KEY as per coding guidelines,
+    // which also resolves the TypeScript error on 'import.meta.env'.
     const apiKey = process.env.API_KEY;
 
     if (!apiKey) {
         throw new Error(
-            "Gemini API key not configured. Please ensure the API_KEY environment variable is set."
+            "Gemini API key not configured. Please ensure the API_KEY environment variable is set in your deployment settings."
         );
     }
 
