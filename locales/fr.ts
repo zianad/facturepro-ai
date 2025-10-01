@@ -143,5 +143,6 @@ export const fr = {
   noItemsInInvoice: "Aucun article ajouté à la facture pour le moment.",
   quantityToAdd: "Qté",
   quantityExceedsStock: "La quantité dépasse le stock disponible.",
-  itemAdded: "Article ajouté."
+  itemAdded: "Article ajouté.",
+  noItemsForDateError: "Aucun article d'inventaire n'est disponible à la date de facturation sélectionnée ou avant. Veuillez choisir une date ultérieure ou ajouter des articles avec des dates d'achat antérieures."
 };

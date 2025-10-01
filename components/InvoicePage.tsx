@@ -295,8 +295,15 @@ const InvoicePage: React.FC = () => {
         setSuccessMessage(null);
 
         try {
+            // Filter inventory to only include items available on or before the invoice date.
+            const historicallyAvailableItems = inventory.filter(item => item.purchaseDate <= invoiceDate);
+            
+            if (historicallyAvailableItems.length === 0) {
+                throw new Error(t('noItemsForDateError'));
+            }
+
             const targetSubtotal = totalTTC / 1.20; // Calculate target before tax
-            const suggestedItems = selectInvoiceItemsForTotalLocally(targetSubtotal, inventory);
+            const suggestedItems = selectInvoiceItemsForTotalLocally(targetSubtotal, historicallyAvailableItems);
 
             if (suggestedItems.length === 0) {
                 throw new Error(t('generateByTotalError'));

@@ -145,5 +145,6 @@ export const ar: typeof fr = {
   noItemsInInvoice: "لم تتم إضافة أي عناصر إلى الفاتورة بعد.",
   quantityToAdd: "الكمية",
   quantityExceedsStock: "الكمية تتجاوز المخزون المتاح.",
-  itemAdded: "تمت إضافة العنصر."
+  itemAdded: "تمت إضافة العنصر.",
+  noItemsForDateError: "لا توجد عناصر متاحة في المخزون في تاريخ الفاتورة المحدد أو قبله. يرجى اختيار تاريخ لاحق أو إضافة عناصر بتاريخ شراء أقدم."
 };
