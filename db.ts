@@ -1,4 +1,3 @@
-
 import { InventoryItem, GeneratedInvoice, ProfileData } from './types';
 
 const DB_NAME = 'InvoiceAppDB';
@@ -182,55 +181,88 @@ export const addInvoice = (invoice: Omit<GeneratedInvoice, 'id'>): Promise<Gener
 
 export const createInvoiceAndUpdateStock = (invoiceData: Omit<GeneratedInvoice, 'id'>): Promise<void> => {
     return new Promise((resolve, reject) => {
+        // This transaction covers both stores, ensuring atomicity.
         const transaction = db.transaction([INVOICES_STORE_NAME, INVENTORY_STORE_NAME], 'readwrite');
         const invoiceStore = transaction.objectStore(INVOICES_STORE_NAME);
         const inventoryStore = transaction.objectStore(INVENTORY_STORE_NAME);
-        const itemsToUpdate: { reference: string, quantityToDeduct: number }[] = invoiceData.items.map(item => ({
-            reference: item.reference,
-            quantityToDeduct: item.quantity
-        }));
-
+        
+        // Set up global transaction handlers
         transaction.oncomplete = () => {
+            console.log("Invoice created and stock updated successfully.");
             resolve();
         };
         transaction.onerror = (event) => {
-            console.error("Transaction error:", (event.target as IDBRequest).error);
-            reject((event.target as IDBRequest).error);
+            const error = (event.target as IDBRequest).error;
+            console.error("Transaction error:", error);
+            reject(error);
         };
-        
         transaction.onabort = (event) => {
-            console.error("Transaction aborted:", (event.target as IDBTransaction).error);
-            reject((event.target as IDBTransaction).error);
+            const error = (event.target as IDBTransaction).error;
+            console.error("Transaction aborted:", error);
+            // The reject call might already be handled by a specific error, but this is a fallback.
+            reject(error || new Error('Transaction aborted for an unknown reason.'));
         };
 
+        // Step 1: Add the new invoice.
+        const addInvoiceRequest = invoiceStore.add(invoiceData);
 
-        // Add the new invoice
-        invoiceStore.add(invoiceData);
+        addInvoiceRequest.onsuccess = () => {
+            // Step 2: Once the invoice is added, proceed to update inventory stock.
+            const itemsToUpdate = invoiceData.items;
+            
+            if (itemsToUpdate.length === 0) {
+                // No items to update, the transaction will complete on its own.
+                return;
+            }
 
-        // Update inventory items
-        const inventoryIndex = inventoryStore.index('reference');
-        let processed = 0;
-        
-        if (itemsToUpdate.length === 0) return;
+            const inventoryIndex = inventoryStore.index('reference');
 
-        itemsToUpdate.forEach(itemUpdate => {
-            const getRequest = inventoryIndex.get(itemUpdate.reference);
-            getRequest.onsuccess = () => {
-                const item: InventoryItem = getRequest.result;
-                if (item) {
-                    if (item.quantity >= itemUpdate.quantityToDeduct) {
-                        item.quantity -= itemUpdate.quantityToDeduct;
-                        inventoryStore.put(item);
-                    } else {
-                        transaction.abort();
-                        reject(new Error(`Insufficient stock for item reference ${item.reference}.`));
-                    }
-                } else {
-                    transaction.abort();
-                    reject(new Error(`Item with reference ${itemUpdate.reference} not found in inventory.`));
+            // This recursive function processes one item at a time, keeping the transaction alive.
+            const processNextItem = (index: number) => {
+                // Base case: If all items have been processed, exit the recursion.
+                if (index >= itemsToUpdate.length) {
+                    return;
                 }
+
+                const itemToDeduct = itemsToUpdate[index];
+                const getRequest = inventoryIndex.get(itemToDeduct.reference);
+
+                getRequest.onsuccess = () => {
+                    const stockItem: InventoryItem | undefined = getRequest.result;
+
+                    if (!stockItem) {
+                        const error = new Error(`Item with reference ${itemToDeduct.reference} not found. Aborting.`);
+                        console.error(error);
+                        transaction.abort();
+                        // Reject is handled by onabort
+                        return;
+                    }
+
+                    if (stockItem.quantity < itemToDeduct.quantity) {
+                        const error = new Error(`Insufficient stock for ${stockItem.name} (Ref: ${stockItem.reference}). Required: ${itemToDeduct.quantity}, Available: ${stockItem.quantity}. Aborting.`);
+                        console.error(error);
+                        transaction.abort();
+                         // Reject is handled by onabort
+                        return;
+                    }
+
+                    // If stock is sufficient, update the quantity.
+                    stockItem.quantity -= itemToDeduct.quantity;
+                    const putRequest = inventoryStore.put(stockItem);
+
+                    putRequest.onsuccess = () => {
+                        // Once this item is updated, process the next one.
+                        processNextItem(index + 1);
+                    };
+                    // putRequest.onerror is handled by transaction.onerror
+                };
+                 // getRequest.onerror is handled by transaction.onerror
             };
-        });
+
+            // Start processing from the first item.
+            processNextItem(0);
+        };
+         // addInvoiceRequest.onerror is handled by transaction.onerror
     });
 };
 
