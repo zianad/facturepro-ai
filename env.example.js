@@ -7,7 +7,7 @@
 
 window.process = {
   env: {
-    // Vite requires environment variables exposed to the client to be prefixed with VITE_
-    VITE_API_KEY: "YOUR_GEMINI_API_KEY_HERE"
+    // FIX: Renamed VITE_API_KEY to API_KEY to align with Gemini API guidelines.
+    API_KEY: "YOUR_GEMINI_API_KEY_HERE"
   }
 };
