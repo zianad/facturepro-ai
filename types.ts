@@ -39,20 +39,24 @@ export interface GeneratedInvoice {
   items: InvoiceItem[];
 }
 
+// FIX: Define and export SuggestedItem for AI-based invoice item suggestions.
+export interface SuggestedItem {
+  id: number; // Corresponds to InventoryItem.id
+  quantity: number;
+}
+
+// FIX: Define and export types for data extracted from invoice images by AI.
+export interface ExtractedInvoiceItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
 export interface ExtractedInvoiceData {
   invoiceNumber: string;
   vendorName: string;
   invoiceDate: string; // YYYY-MM-DD
   totalAmount: number;
-  items: {
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    total: number;
-  }[];
-}
-
-export interface SuggestedItem {
-    id: number;
-    quantity: number;
+  items: ExtractedInvoiceItem[];
 }

@@ -1,22 +1,13 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { GeneratedInvoice, InventoryItem, ExtractedInvoiceData, ProfileData, InvoiceItem } from '../types';
+import { GeneratedInvoice, InventoryItem, ProfileData, InvoiceItem } from '../types';
 import { initDB, getAllInvoices, deleteInvoiceAndRestock, createInvoiceAndUpdateStock, getAllInventoryItems, getProfile } from '../db';
-import { analyzeInvoiceImage } from '../services/geminiService';
 
 // --- Icons ---
 const Spinner = () => <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
 const EyeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>;
 const PrintIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v3a2 2 0 002 2h8a2 2 0 002-2v-3h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" /></svg>;
-
-const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve((reader.result as string).split(',')[1]);
-    reader.onerror = error => reject(error);
-});
-
 
 const InvoicePage: React.FC = () => {
     const { t } = useLanguage();
@@ -25,12 +16,6 @@ const InvoicePage: React.FC = () => {
     const [dbInitialized, setDbInitialized] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     
-    // For AI Invoice Analysis
-    const [analysisFile, setAnalysisFile] = useState<File | null>(null);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysisResult, setAnalysisResult] = useState<ExtractedInvoiceData | null>(null);
-    const [analysisError, setAnalysisError] = useState<string | null>(null);
-
     // For Generating Invoice by Total
     const [isGeneratingModalOpen, setGeneratingModalOpen] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -73,29 +58,6 @@ const InvoicePage: React.FC = () => {
             }
         });
     }, [loadData]);
-
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setAnalysisError(null);
-        setAnalysisResult(null);
-        setAnalysisFile(e.target.files?.[0] || null);
-    };
-
-    const handleAnalyze = async () => {
-        if (!analysisFile) return;
-        setIsAnalyzing(true);
-        setAnalysisError(null);
-        setAnalysisResult(null);
-
-        try {
-            const base64Image = await toBase64(analysisFile);
-            const result = await analyzeInvoiceImage(base64Image, analysisFile.type);
-            setAnalysisResult(result);
-        } catch (err) {
-            setAnalysisError(err instanceof Error ? err.message : String(t('analysisError')));
-        } finally {
-            setIsAnalyzing(false);
-        }
-    };
     
     // Algorithm to select items for invoice
     const selectInvoiceItemsForTotalLocally = (
@@ -287,7 +249,7 @@ const InvoicePage: React.FC = () => {
         <div className="container mx-auto p-4 sm:p-6">
             <h1 className="text-3xl font-bold mb-6 text-gray-800">{t('invoices')}</h1>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className="grid grid-cols-1 gap-6 mb-6">
                 <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
                     <h2 className="text-xl font-semibold mb-2 text-gray-700">{t('createInvoiceTitle')}</h2>
                     <p className="text-sm text-gray-500 mb-4">{t('generateInvoiceByTotal')}</p>
@@ -295,41 +257,8 @@ const InvoicePage: React.FC = () => {
                         {t('createNewInvoice')}
                     </button>
                 </div>
-                <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                    <h2 className="text-xl font-semibold mb-2 text-gray-700">{t('invoicePageTitle')}</h2>
-                    <p className="text-sm text-gray-500 mb-4">{t('uploadInvoiceImage')}</p>
-                     <div className="flex items-center space-x-2">
-                         <input type="file" id="invoice-analyzer" onChange={handleFileSelect} accept="image/*" className="hidden"/>
-                         <label htmlFor="invoice-analyzer" className="cursor-pointer px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 inline-flex items-center shadow-sm hover:shadow-md">
-                            {t('selectAFile')}
-                         </label>
-                        {analysisFile && <span className="text-sm text-gray-600 flex-1 truncate">{analysisFile.name}</span>}
-                    </div>
-                    {analysisFile && (
-                         <button onClick={handleAnalyze} disabled={isAnalyzing} className="mt-3 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-indigo-400">
-                            {isAnalyzing ? <Spinner /> : t('analyze')}
-                        </button>
-                    )}
-                    {analysisError && <p className="mt-2 text-sm text-red-600">{analysisError}</p>}
-                </div>
             </div>
 
-            {analysisResult && (
-                <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
-                    <h2 className="text-xl font-semibold mb-4 text-gray-700">{t('extractedData')}</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                        <div><strong>{t('invoiceNumber')}:</strong> {analysisResult.invoiceNumber}</div>
-                        <div><strong>{t('vendorName')}:</strong> {analysisResult.vendorName}</div>
-                        <div><strong>{t('invoiceDate')}:</strong> {analysisResult.invoiceDate}</div>
-                        <div><strong>{t('totalAmount')}:</strong> {analysisResult.totalAmount.toFixed(2)}</div>
-                    </div>
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-100"><tr><th className="p-2">{t('description')}</th><th className="p-2">{t('quantity')}</th><th className="p-2">{t('unitPrice')}</th><th className="p-2">{t('total')}</th></tr></thead>
-                        <tbody>{analysisResult.items.map((item, i) => <tr key={i}><td className="p-2 border-b">{item.description}</td><td className="p-2 border-b">{item.quantity}</td><td className="p-2 border-b">{item.unitPrice.toFixed(2)}</td><td className="p-2 border-b">{item.total.toFixed(2)}</td></tr>)}</tbody>
-                    </table>
-                </div>
-            )}
-            
             <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
                 <div className="p-4 flex flex-col sm:flex-row justify-between items-center border-b bg-gray-50">
                     <h2 className="text-xl font-semibold text-gray-700 mb-2 sm:mb-0">{t('invoiceHistoryTitle')} ({invoices.length})</h2>
