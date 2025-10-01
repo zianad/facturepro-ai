@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { useAuth } from '../context/AuthContext';
 import { getProfile, updateProfile, initDB } from '../db';
 import { ProfileData } from '../types';
 
@@ -47,11 +46,10 @@ const InputField: React.FC<{ id: string; name: string; label: string; value: str
 
 const ProfilePage: React.FC = () => {
   const { t } = useLanguage();
-  const { user } = useAuth();
   
   const [dbInitialized, setDbInitialized] = useState(false);
   const [formData, setFormData] = useState<Omit<ProfileData, 'id'>>({
-    userName: user?.username || '',
+    userName: '',
     companyName: '',
     companyICE: '',
     companyAddress: '',
@@ -67,15 +65,13 @@ const ProfilePage: React.FC = () => {
       const profileData = await getProfile();
       if (profileData) {
         setFormData(profileData);
-      } else {
-        setFormData(prev => ({ ...prev, userName: user?.username || '' }));
       }
     } catch (error) {
       console.error("Failed to load profile:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [user?.username]);
+  }, []);
 
   useEffect(() => {
     initDB().then(success => {

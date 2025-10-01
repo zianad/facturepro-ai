@@ -2,14 +2,13 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import * as XLSX from 'xlsx';
 import { useLanguage } from '../context/LanguageContext';
 import { InventoryItem } from '../types';
-import { parseInventoryFile } from '../services/geminiService';
 import { initDB, getAllInventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem, addMultipleInventoryItems, clearInventory } from '../db';
 
 // --- Icons ---
-const BoxIcon = () => <svg xmlns="http://www.w.org/2000/svg" className="h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-14L4 7v10l8 4m0-14L4 7" /></svg>;
-const CollectionIcon = () => <svg xmlns="http://www.w.org/2000/svg" className="h-6 w-6 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2H5a2 2 0 00-2 2v2m14 0H5" /></svg>;
-const CashIcon = () => <svg xmlns="http://www.w.org/2000/svg" className="h-6 w-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
-const EditIcon = () => <svg xmlns="http://www.w.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>;
+const BoxIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-14L4 7v10l8 4m0-14L4 7" /></svg>;
+const CollectionIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2H5a2 2 0 00-2 2v2m14 0H5" /></svg>;
+const CashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
+const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>;
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
 const Spinner = () => <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
 
@@ -256,34 +255,163 @@ const InventoryPage: React.FC = () => {
     if (!inventoryFile || !dbInitialized) return;
     setIsFileProcessing(true); setFileError(null); setFileSuccess(null);
     try {
-      let fileContent = '';
-      if (inventoryFile.name.endsWith('.xlsx') || inventoryFile.name.endsWith('.xls')) {
         const data = await inventoryFile.arrayBuffer();
         const workbook = XLSX.read(data);
         const sheetName = workbook.SheetNames[0];
         if (!sheetName) throw new Error("The Excel file is empty.");
         const worksheet = workbook.Sheets[sheetName];
-        fileContent = XLSX.utils.sheet_to_csv(worksheet);
-      } else {
-        fileContent = await inventoryFile.text();
-      }
 
-      if (!fileContent.trim()) throw new Error("The file is empty.");
+        const headerMapping: { [key: string]: string[] } = {
+            reference: ['reference', 'référence', 'ref', 'id', 'المرجع', 'code'],
+            name: ['name', 'nom', 'designation', 'désignation', 'description', 'article', 'produit', 'الاسم', 'الوصف', 'libelle'],
+            quantity: ['quantity', 'quantité', 'qte', 'qté', 'quantite', 'الكمية', 'stock'],
+            price: ['price', 'prix', 'prix unitaire', 'pu', 'p.u', 'السعر', 'tarif'],
+            purchaseDate: ["purchase date", "date d'achat", 'date', 'تاريخ الشراء']
+        };
 
-      const parsedItems = await parseInventoryFile(fileContent);
-      if (!Array.isArray(parsedItems)) throw new Error("Parsed data is not an array.");
-      
-      if (parsedItems.length === 0) {
-        throw new Error(t('fileEmptyError'));
-      }
+        // Check for headers by inspecting the first row
+        const firstRowJson: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 'A1:E1' });
+        const firstRowValues = firstRowJson.length > 0 ? firstRowJson[0] : [];
+        let hasHeaders = false;
+        
+        if (firstRowValues.length > 0) {
+            let headerMatches = 0;
+            const allPossibleHeaders = new Set(Object.values(headerMapping).flat());
 
-      await addMultipleInventoryItems(parsedItems);
-      await loadInventory();
+            for (const cell of firstRowValues) {
+                if (typeof cell === 'string' && allPossibleHeaders.has(cell.toLowerCase().trim())) {
+                    headerMatches++;
+                }
+            }
+            
+            // If at least two columns in the first row match known headers, assume it's a header row.
+            if (headerMatches >= 2) {
+                hasHeaders = true;
+            }
+        }
+        
+        const jsonData: any[] = hasHeaders 
+            ? XLSX.utils.sheet_to_json(worksheet) 
+            : XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-      setFileSuccess(t('fileProcessingSuccess'));
-      setInventoryFile(null);
-      const fileInput = document.getElementById('excel-importer') as HTMLInputElement;
-      if(fileInput) fileInput.value = '';
+        if (jsonData.length === 0) {
+            throw new Error(t('fileEmptyError'));
+        }
+        
+        const findHeaderKey = (row: any, targetKey: string): string | undefined => {
+            const possibleHeaders = headerMapping[targetKey];
+            for (const header of possibleHeaders) {
+                const foundKey = Object.keys(row).find(k => k.toLowerCase().trim() === header);
+                if (foundKey) return foundKey;
+            }
+            return undefined;
+        };
+        
+        const robustParseFloat = (value: any): number => {
+            if (value === null || value === undefined) return 0;
+            if (typeof value === 'number' && !isNaN(value)) {
+                return value;
+            }
+            
+            let str = String(value).trim();
+            str = str.replace(/[^0-9,.-]/g, '');
+        
+            const lastComma = str.lastIndexOf(',');
+            const lastDot = str.lastIndexOf('.');
+        
+            if (lastComma > lastDot) {
+                str = str.replace(/\./g, '').replace(',', '.');
+            } 
+            else {
+                str = str.replace(/,/g, '');
+            }
+        
+            if (!str.includes(',') && str.split('.').length === 2 && str.split('.')[1].length === 3) {
+                 if (!str.startsWith('0.')) {
+                    str = str.replace('.', '');
+                 }
+            }
+        
+            const num = parseFloat(str);
+            return isNaN(num) ? 0 : num;
+        };
+
+        let parsedItems: Omit<InventoryItem, 'id'>[];
+
+        if (hasHeaders) {
+            parsedItems = jsonData.map((row: any) => {
+                const referenceKey = findHeaderKey(row, 'reference');
+                const nameKey = findHeaderKey(row, 'name');
+                const quantityKey = findHeaderKey(row, 'quantity');
+                const priceKey = findHeaderKey(row, 'price');
+                const purchaseDateKey = findHeaderKey(row, 'purchaseDate');
+                
+                const quantity = Math.round(robustParseFloat(quantityKey ? row[quantityKey] : 0));
+                const price = robustParseFloat(priceKey ? row[priceKey] : 0);
+                
+                let dateStr = new Date().toISOString().split('T')[0];
+                if (purchaseDateKey && row[purchaseDateKey]) {
+                    if (typeof row[purchaseDateKey] === 'number') {
+                        const excelDate = new Date(Math.round((row[purchaseDateKey] - 25569) * 86400 * 1000));
+                        dateStr = excelDate.toISOString().split('T')[0];
+                    } else if (typeof row[purchaseDateKey] === 'string') {
+                        const parsedDate = new Date(row[purchaseDateKey]);
+                        if (!isNaN(parsedDate.getTime())) {
+                            dateStr = parsedDate.toISOString().split('T')[0];
+                        }
+                    }
+                }
+
+                return {
+                    reference: referenceKey ? String(row[referenceKey]) : '',
+                    name: nameKey ? String(row[nameKey]) : 'N/A',
+                    quantity, price, purchaseDate: dateStr,
+                };
+            });
+        } else {
+            // No headers, process as array of arrays, assuming column order: Ref, Name, Qty, Price, Date
+            parsedItems = (jsonData as any[][]).map((row: any[]) => {
+                if (row.length === 0 || row.every(cell => cell === null || cell === undefined || String(cell).trim() === '')) {
+                    return null; // Skip empty rows
+                }
+                const quantity = Math.round(robustParseFloat(row[2] || 0));
+                const price = robustParseFloat(row[3] || 0);
+                
+                let dateStr = new Date().toISOString().split('T')[0];
+                const rawDate = row[4];
+                if (rawDate) {
+                    if (typeof rawDate === 'number') {
+                        const excelDate = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
+                        dateStr = excelDate.toISOString().split('T')[0];
+                    } else if (typeof rawDate === 'string') {
+                        const parsedDate = new Date(rawDate);
+                        if (!isNaN(parsedDate.getTime())) {
+                            dateStr = parsedDate.toISOString().split('T')[0];
+                        }
+                    }
+                }
+                
+                return {
+                    reference: String(row[0] || ''),
+                    name: String(row[1] || 'N/A'),
+                    quantity, price, purchaseDate: dateStr
+                };
+            }).filter(item => item !== null) as Omit<InventoryItem, 'id'>[]; // Filter out empty rows
+        }
+        
+        const validItems = parsedItems.filter(item => item && item.name && item.name.trim() !== 'N/A' && item.name.trim() !== '' && item.reference && item.reference.trim() !== '');
+
+        if (validItems.length === 0) {
+            throw new Error(t('fileEmptyError'));
+        }
+
+        await addMultipleInventoryItems(validItems);
+        await loadInventory();
+
+        setFileSuccess(t('fileProcessingSuccess'));
+        setInventoryFile(null);
+        const fileInput = document.getElementById('excel-importer') as HTMLInputElement;
+        if(fileInput) fileInput.value = '';
 
     } catch (err) {
       console.error("File processing error:", err);
@@ -292,6 +420,7 @@ const InventoryPage: React.FC = () => {
       setIsFileProcessing(false);
     }
   };
+
 
   const handleClearInventory = async () => {
     if (window.confirm(t('confirmClearInventory'))) {
@@ -336,7 +465,7 @@ const InventoryPage: React.FC = () => {
                     </div>
                     {inventoryFile && (
                          <button onClick={handleProcessFile} disabled={isFileProcessing || !dbInitialized} className="mt-3 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-indigo-400">
-                            {isFileProcessing ? t('fileProcessing') : t('uploadAndProcess')}
+                            {isFileProcessing ? <Spinner /> : t('uploadAndProcess')}
                         </button>
                     )}
                     {fileError && <p className="mt-2 text-sm text-red-600">{fileError}</p>}

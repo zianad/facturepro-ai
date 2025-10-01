@@ -1,5 +1,5 @@
 {
   "name": "Intelligent Invoice Generator02",
-  "description": "A web application to manage inventory and create invoices, with the ability to automatically analyze scanned invoices (images) using the Gemini API.",
+  "description": "A web application to manage inventory and create invoices, with the ability to import inventory data from local files.",
   "requestFramePermissions": []
 }

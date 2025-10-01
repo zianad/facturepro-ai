@@ -13,16 +13,13 @@ const getAiClient = (): GoogleGenAI => {
         return aiInstance;
     }
 
-    // DEFINITIVE FIX: Use `import.meta.env.VITE_API_KEY`.
-    // This is the standard and secure way to access environment variables
-    // in a client-side application built with Vite (which Vercel uses).
-    // The `VITE_` prefix is required by the build tool.
-    // FIX: Correctly cast `import.meta` to `any` to access the `env` property injected by Vite.
-    const apiKey = (import.meta as any).env.VITE_API_KEY;
+    // Safely access the API key from either Vite's `import.meta.env` (for production/Vercel)
+    // or from `window.process.env` (for local development via env.js).
+    const apiKey = (import.meta as any).env?.VITE_API_KEY || (window as any).process?.env?.VITE_API_KEY;
 
-    if (!apiKey) {
+    if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE") {
         throw new Error(
-            "Gemini API key not configured. Please ensure the 'VITE_API_KEY' environment variable is set in your deployment settings."
+            "Gemini API key not configured. Please create `env.js` from `env.example.js` and add your key."
         );
     }
 
@@ -109,88 +106,78 @@ export const parseInventoryFile = async (fileContent: string): Promise<Omit<Inve
 };
 
 /**
- * Suggests a combination of inventory items to match a target total invoice amount (pre-tax).
- * @param inventory The available list of inventory items.
- * @param targetTotal The target invoice total (HT - hors taxes).
- * @returns A promise that resolves to an array of suggested items with their IDs and quantities.
+ * Suggests a combination of inventory items that add up to a target total value.
+ * @param targetTotal The desired total amount for the invoice.
+ * @param inventory A list of available inventory items.
+ * @returns A promise that resolves to an array of suggested items with their quantities.
  */
-export const suggestInvoiceItemsForTotal = async (
-  inventory: InventoryItem[],
-  targetTotal: number
-): Promise<SuggestedItem[]> => {
-  const model = 'gemini-2.5-flash';
-  const ai = getAiClient(); // Get client on-demand
+export const suggestInvoiceItemsForTotal = async (targetTotal: number, inventory: InventoryItem[]): Promise<SuggestedItem[]> => {
+    const model = 'gemini-2.5-flash';
+    const ai = getAiClient();
 
-  const inventoryForPrompt = inventory
-    .filter(item => item.quantity > 0)
-    .map(({ id, name, price, quantity }) => ({ id, name, price, quantity }));
+    // Prepare a simplified list of inventory for the prompt to save tokens and improve focus.
+    const inventoryForPrompt = inventory
+        .filter(item => item.quantity > 0 && item.price > 0)
+        .map(({ id, name, quantity, price }) => ({ id, name, quantity, price }));
 
-  if (inventoryForPrompt.length === 0) {
-      return [];
-  }
-
-  const prompt = `
-    You are an expert system for generating invoices. Your task is to select a combination of items from the provided inventory list to create an invoice that totals as close as possible to a target amount, without exceeding it.
-
-    Rules:
-    - You MUST strictly respect the available 'quantity' for each item. You cannot suggest more than what is available.
-    - The goal is to reach a total value as close as possible to ${targetTotal}, but not over.
-    - To make invoices more realistic, prioritize using a variety of items and quantities greater than two, ideally more than ten if possible, rather than many items with a quantity of one.
-    - The result MUST be a JSON array of objects, where each object contains an 'id' and a 'quantity'.
-    - If the inventory is empty or no combination can be made to approach the target total, return an empty array.
-
-    Here is the available inventory in JSON format:
-    ---
-    ${JSON.stringify(inventoryForPrompt)}
-    ---
-
-    Target Invoice Total (before tax): ${targetTotal}
-  `;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.INTEGER },
-              quantity: { type: Type.INTEGER },
-            },
-            required: ['id', 'quantity'],
-          },
-        },
-      },
-    });
-
-    const jsonString = response.text.trim();
-    const suggestions = JSON.parse(jsonString);
+    if (inventoryForPrompt.length === 0) {
+        throw new Error("Inventory is empty or items have no price/quantity.");
+    }
     
-    if (!Array.isArray(suggestions)) {
-      console.error("Suggestions data is not an array:", suggestions);
-      throw new Error("Failed to suggest items: AI response was not a valid array.");
-    }
+    const prompt = `
+      From the following list of available inventory items, select a combination of items and their quantities
+      whose total price (item.price * quantity) is as close as possible to the target amount of ${targetTotal}.
 
-    return suggestions
-        .map(s => ({
-            id: Number(s.id),
-            quantity: Number(s.quantity)
-        }))
-        .filter(s => s.id > 0 && s.quantity > 0);
+      Constraints:
+      1.  The quantity for any selected item must NOT exceed its available quantity in stock.
+      2.  The goal is to reach the target total. You can be slightly under or over, but aim for the closest possible sum.
+      3.  Prioritize using a variety of items if possible, but accuracy to the total is most important.
+      4.  If the target total is too small or large to be met, return an empty array.
+      5.  Return ONLY a JSON array of objects, where each object contains the item 'id' (as a number) and the 'quantity' (as a number) to be included in the invoice.
+      
+      Inventory List:
+      ---
+      ${JSON.stringify(inventoryForPrompt, null, 2)}
+      ---
+    `;
 
-  } catch (error) {
-    console.error('Error suggesting invoice items with Gemini:', error);
-    // Re-throw the specific error from getAiClient or a generic one.
-    if (error instanceof Error && error.message.startsWith("Gemini API key")) {
-        throw error;
+    try {
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            id: { type: Type.INTEGER, description: "The unique ID of the inventory item." },
+                            quantity: { type: Type.INTEGER, description: "The quantity of this item to include." }
+                        },
+                        required: ['id', 'quantity']
+                    }
+                }
+            }
+        });
+        
+        const jsonString = response.text.trim();
+        const suggestedItems = JSON.parse(jsonString);
+
+        if (!Array.isArray(suggestedItems)) {
+            throw new Error("AI response was not a valid array.");
+        }
+
+        return suggestedItems as SuggestedItem[];
+
+    } catch (error) {
+        console.error('Error suggesting invoice items with Gemini:', error);
+        if (error instanceof Error && error.message.startsWith("Gemini API key")) {
+            throw error;
+        }
+        if (error instanceof SyntaxError) {
+            throw new Error('Failed to parse the AI response for suggested items. The format was invalid.');
+        }
+        throw new Error('An error occurred while communicating with the AI service to create the invoice.');
     }
-    if (error instanceof SyntaxError) {
-        throw new Error('Failed to parse the AI response. The format was invalid.');
-    }
-    throw new Error('An error occurred while communicating with the AI service to suggest items.');
-  }
 };

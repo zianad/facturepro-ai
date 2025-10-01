@@ -1,3 +1,4 @@
+
 import { InventoryItem, GeneratedInvoice, ProfileData } from './types';
 
 const DB_NAME = 'InvoiceAppDB';
@@ -176,6 +177,60 @@ export const addInvoice = (invoice: Omit<GeneratedInvoice, 'id'>): Promise<Gener
             resolve({ ...invoice, id: addedId });
         };
         request.onerror = (event) => reject((event.target as IDBRequest).error);
+    });
+};
+
+export const createInvoiceAndUpdateStock = (invoiceData: Omit<GeneratedInvoice, 'id'>): Promise<void> => {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([INVOICES_STORE_NAME, INVENTORY_STORE_NAME], 'readwrite');
+        const invoiceStore = transaction.objectStore(INVOICES_STORE_NAME);
+        const inventoryStore = transaction.objectStore(INVENTORY_STORE_NAME);
+        const itemsToUpdate: { reference: string, quantityToDeduct: number }[] = invoiceData.items.map(item => ({
+            reference: item.reference,
+            quantityToDeduct: item.quantity
+        }));
+
+        transaction.oncomplete = () => {
+            resolve();
+        };
+        transaction.onerror = (event) => {
+            console.error("Transaction error:", (event.target as IDBRequest).error);
+            reject((event.target as IDBRequest).error);
+        };
+        
+        transaction.onabort = (event) => {
+            console.error("Transaction aborted:", (event.target as IDBTransaction).error);
+            reject((event.target as IDBTransaction).error);
+        };
+
+
+        // Add the new invoice
+        invoiceStore.add(invoiceData);
+
+        // Update inventory items
+        const inventoryIndex = inventoryStore.index('reference');
+        let processed = 0;
+        
+        if (itemsToUpdate.length === 0) return;
+
+        itemsToUpdate.forEach(itemUpdate => {
+            const getRequest = inventoryIndex.get(itemUpdate.reference);
+            getRequest.onsuccess = () => {
+                const item: InventoryItem = getRequest.result;
+                if (item) {
+                    if (item.quantity >= itemUpdate.quantityToDeduct) {
+                        item.quantity -= itemUpdate.quantityToDeduct;
+                        inventoryStore.put(item);
+                    } else {
+                        transaction.abort();
+                        reject(new Error(`Insufficient stock for item reference ${item.reference}.`));
+                    }
+                } else {
+                    transaction.abort();
+                    reject(new Error(`Item with reference ${itemUpdate.reference} not found in inventory.`));
+                }
+            };
+        });
     });
 };
 
