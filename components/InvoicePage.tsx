@@ -327,13 +327,34 @@ const InvoicePage: React.FC = () => {
                 }
             }
 
-            const actualTotal = invoiceItems.reduce((sum, item) => sum + item.total, 0);
+            const subTotalBeforeAdjustment = invoiceItems.reduce((sum, item) => sum + item.total, 0);
+            const difference = targetSubtotal - subTotalBeforeAdjustment;
+
+            // Adjust the price of one item to make the subtotal match the target exactly.
+            if (difference !== 0 && invoiceItems.length > 0) {
+                // Find the item with the highest total value to absorb the difference.
+                const itemToAdjust = invoiceItems.reduce((prev, current) => (prev.total > current.total) ? prev : current);
+
+                // Ensure the adjustment doesn't result in a negative total for the item.
+                if (itemToAdjust.total + difference > 0) {
+                    const newTotalForItem = itemToAdjust.total + difference;
+                    const newUnitPrice = newTotalForItem / itemToAdjust.quantity;
+
+                    // Update the item in the array with the adjusted values.
+                    itemToAdjust.total = newTotalForItem;
+                    itemToAdjust.unitPrice = newUnitPrice;
+                } else {
+                    console.warn("Could not adjust invoice total exactly without making an item's total negative.");
+                }
+            }
+            
+            const finalSubtotal = invoiceItems.reduce((sum, item) => sum + item.total, 0);
 
             const newInvoice: Omit<GeneratedInvoice, 'id'> = {
                 invoiceNumber,
                 customerName,
                 invoiceDate,
-                totalAmount: actualTotal, // This is the subtotal (HT)
+                totalAmount: finalSubtotal, // This is the exact subtotal (HT)
                 items: invoiceItems,
             };
 
