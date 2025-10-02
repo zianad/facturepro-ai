@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode, useMemo, useCallback } from 'react';
+import * as React from 'react';
 import { fr } from '../locales/fr';
 import { ar } from '../locales/ar';
 
@@ -14,17 +14,17 @@ interface LanguageContextType {
   t: (key: TranslationKey) => string;
 }
 
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+const LanguageContext = React.createContext<LanguageContextType | undefined>(undefined);
 
-export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('fr');
+export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [language, setLanguage] = React.useState<Language>('fr');
 
-  const t = useCallback((key: TranslationKey): string => {
+  const t = React.useCallback((key: TranslationKey): string => {
     // Fallback to French if a translation is missing in another language, then to the key itself.
     return translations[language]?.[key] || translations.fr[key] || key;
   }, [language]);
 
-  const value = useMemo(() => ({
+  const value = React.useMemo(() => ({
     language,
     setLanguage,
     t
@@ -39,7 +39,7 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
 };
 
 export const useLanguage = (): LanguageContextType => {
-  const context = useContext(LanguageContext);
+  const context = React.useContext(LanguageContext);
   if (context === undefined) {
     throw new Error('useLanguage must be used within a LanguageProvider');
   }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -11,13 +11,13 @@ const Spinner = () => (
 );
 
 const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = React.useState('');
+  const [password, setPassword] = React.useState('');
   const { login, isAuthenticated, loading } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (isAuthenticated) {
       navigate('/invoices', { replace: true });
     }

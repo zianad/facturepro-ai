@@ -1,4 +1,3 @@
-
 import { GeneratedInvoice, InventoryItem, ProfileData } from './types';
 
 const DB_NAME = 'FactureProDB';
@@ -70,32 +69,13 @@ export const addMultipleInventoryItems = (items: Omit<InventoryItem, 'id'>[]): P
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([INVENTORY_STORE_NAME], 'readwrite');
         const store = transaction.objectStore(INVENTORY_STORE_NAME);
-        const index = store.index('reference');
 
         transaction.oncomplete = () => resolve();
         transaction.onerror = (event) => reject((event.target as IDBTransaction).error);
 
-        const processNext = (itemIndex: number) => {
-            if (itemIndex >= items.length) return;
-            const item = items[itemIndex];
-
-            const getRequest = index.get(item.reference);
-            getRequest.onsuccess = () => {
-                const existingItem: InventoryItem = getRequest.result;
-                let putRequest: IDBRequest;
-                if (existingItem) {
-                    existingItem.quantity += item.quantity;
-                    existingItem.name = item.name;
-                    existingItem.price = item.price;
-                    existingItem.purchaseDate = item.purchaseDate;
-                    putRequest = store.put(existingItem);
-                } else {
-                    putRequest = store.add(item);
-                }
-                putRequest.onsuccess = () => processNext(itemIndex + 1);
-            };
-        };
-        processNext(0);
+        items.forEach(item => {
+            store.add(item);
+        });
     });
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import * as React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { GeneratedInvoice, InventoryItem, ProfileData, InvoiceItem } from '../types';
 import { initDB, getAllInvoices, deleteInvoiceAndRestock, createInvoiceAndUpdateStock, getAllInventoryItems, getProfile } from '../db';
@@ -11,17 +11,17 @@ const PrintIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w
 
 const InvoicePage: React.FC = () => {
     const { t } = useLanguage();
-    const [invoices, setInvoices] = useState<GeneratedInvoice[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [dbInitialized, setDbInitialized] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [invoices, setInvoices] = React.useState<GeneratedInvoice[]>([]);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [dbInitialized, setDbInitialized] = React.useState(false);
+    const [searchTerm, setSearchTerm] = React.useState('');
     
     // For Generating Invoice by Total
-    const [isGeneratingModalOpen, setGeneratingModalOpen] = useState(false);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [generationError, setGenerationError] = useState<string | null>(null);
+    const [isGeneratingModalOpen, setGeneratingModalOpen] = React.useState(false);
+    const [isGenerating, setIsGenerating] = React.useState(false);
+    const [generationError, setGenerationError] = React.useState<string | null>(null);
     
-    const [generationForm, setGenerationForm] = useState({
+    const [generationForm, setGenerationForm] = React.useState({
       invoiceNumber: '',
       customerName: '',
       invoiceDate: new Date().toISOString().split('T')[0],
@@ -29,13 +29,13 @@ const InvoicePage: React.FC = () => {
     });
 
     // For Viewing Invoice
-    const [viewingInvoice, setViewingInvoice] = useState<GeneratedInvoice | null>(null);
-    const [profile, setProfile] = useState<ProfileData | null>(null);
-    const printRef = useRef<HTMLDivElement>(null);
+    const [viewingInvoice, setViewingInvoice] = React.useState<GeneratedInvoice | null>(null);
+    const [profile, setProfile] = React.useState<ProfileData | null>(null);
+    const printRef = React.useRef<HTMLDivElement>(null);
     
     const VAT_RATE = 0.20;
 
-    const loadData = useCallback(async () => {
+    const loadData = React.useCallback(async () => {
         setIsLoading(true);
         try {
             const [invoiceList, profileData] = await Promise.all([getAllInvoices(), getProfile()]);
@@ -48,7 +48,7 @@ const InvoicePage: React.FC = () => {
         }
     }, []);
 
-    useEffect(() => {
+    React.useEffect(() => {
         initDB().then(success => {
             if (success) {
                 setDbInitialized(true);
@@ -236,7 +236,7 @@ const InvoicePage: React.FC = () => {
         }
     };
     
-    const filteredInvoices = useMemo(() => {
+    const filteredInvoices = React.useMemo(() => {
         if (!searchTerm) return invoices;
         const lowercasedTerm = searchTerm.toLowerCase();
         return invoices.filter(inv =>

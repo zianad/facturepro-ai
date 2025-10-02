@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+import * as React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { getProfile, updateProfile, initDB } from '../db';
 import { ProfileData } from '../types';
@@ -14,7 +13,7 @@ const LocationIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-
 
 // --- Components ---
 const Toast: React.FC<{ message: string; show: boolean; onClose: () => void }> = ({ message, show, onClose }) => {
-    useEffect(() => {
+    React.useEffect(() => {
         if (show) {
             const timer = setTimeout(onClose, 3000);
             return () => clearTimeout(timer);
@@ -47,19 +46,19 @@ const InputField: React.FC<{ id: string; name: string; label: string; value: str
 const ProfilePage: React.FC = () => {
   const { t } = useLanguage();
   
-  const [dbInitialized, setDbInitialized] = useState(false);
-  const [formData, setFormData] = useState<Omit<ProfileData, 'id'>>({
+  const [dbInitialized, setDbInitialized] = React.useState(false);
+  const [formData, setFormData] = React.useState<Omit<ProfileData, 'id'>>({
     userName: '',
     companyName: '',
     companyICE: '',
     companyAddress: '',
     companyPhone: '',
   });
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [showSuccessToast, setShowSuccessToast] = React.useState(false);
 
-  const loadProfile = useCallback(async () => {
+  const loadProfile = React.useCallback(async () => {
     setIsLoading(true);
     try {
       const profileData = await getProfile();
@@ -73,7 +72,7 @@ const ProfilePage: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
+  React.useEffect(() => {
     initDB().then(success => {
       if (success) {
         setDbInitialized(true);

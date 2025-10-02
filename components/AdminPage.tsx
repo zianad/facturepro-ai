@@ -1,5 +1,4 @@
-
-import React from 'react';
+import * as React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 
 const AdminPage: React.FC = () => {

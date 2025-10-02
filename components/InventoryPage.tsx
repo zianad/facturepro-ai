@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import * as React from 'react';
 import * as XLSX from 'xlsx';
 import { useLanguage } from '../context/LanguageContext';
 import { InventoryItem } from '../types';
@@ -46,37 +46,84 @@ const SkeletonLoader = () => (
     </tbody>
 );
 
+const robustParseFloat = (value: any): number => {
+    if (value == null) return 0;
+    if (typeof value === 'number') return value;
+
+    let str = String(value).trim();
+    if (str === '') return 0;
+    
+    let strClean = str.replace(/\s/g, ''); // remove spaces
+
+    const lastComma = strClean.lastIndexOf(',');
+    const lastDot = strClean.lastIndexOf('.');
+
+    // If both are present, determine which is the decimal separator
+    if (lastComma > -1 && lastDot > -1) {
+        if (lastComma > lastDot) { // European: 1.500,25
+            strClean = strClean.replace(/\./g, '').replace(',', '.');
+        } else { // US: 1,500.25
+            strClean = strClean.replace(/,/g, '');
+        }
+    } 
+    // If only one type of separator is present
+    else {
+        const separator = lastComma > -1 ? ',' : '.';
+        const sepIndex = Math.max(lastComma, lastDot);
+        const hasOnlyOneSeparator = strClean.indexOf(separator) === strClean.lastIndexOf(separator);
+
+        // Ambiguity: "1,500" or "1.500". Is it 1.5 or 1500?
+        // Heuristic: if it's the only separator and has 3 digits after, it's thousands.
+        if (hasOnlyOneSeparator && strClean.substring(sepIndex + 1).length === 3) {
+            strClean = strClean.replace(separator, '');
+        } else {
+            // Treat as decimal: "1,5" -> "1.5" or "1,500,000" -> "1500000"
+            if (separator === ',') {
+                 // If there are multiple commas, they are thousand separators
+                if(!hasOnlyOneSeparator) {
+                    strClean = strClean.replace(/,/g, '');
+                } else {
+                    strClean = strClean.replace(',', '.');
+                }
+            }
+        }
+    }
+
+    const num = parseFloat(strClean);
+    return isNaN(num) ? 0 : num;
+};
+
 const InventoryPage: React.FC = () => {
   const { t } = useLanguage();
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [dbInitialized, setDbInitialized] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [items, setItems] = React.useState<InventoryItem[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [dbInitialized, setDbInitialized] = React.useState(false);
+  const [searchTerm, setSearchTerm] = React.useState('');
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentItem, setCurrentItem] = useState<InventoryItem | null>(null);
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [currentItem, setCurrentItem] = React.useState<InventoryItem | null>(null);
   
   const defaultFormData = {
     reference: '', name: '', price: '', quantity: '1',
     purchaseDate: new Date().toISOString().split('T')[0],
   };
-  const [formData, setFormData] = useState(defaultFormData);
-  const [formErrors, setFormErrors] = useState<{ price?: string; quantity?: string }>({});
-  const [isSaving, setIsSaving] = useState(false);
+  const [formData, setFormData] = React.useState(defaultFormData);
+  const [formErrors, setFormErrors] = React.useState<{ price?: string; quantity?: string }>({});
+  const [isSaving, setIsSaving] = React.useState(false);
   
-  const [inventoryFile, setInventoryFile] = useState<File | null>(null);
-  const [isFileProcessing, setIsFileProcessing] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
-  const [fileSuccess, setFileSuccess] = useState<string | null>(null);
+  const [inventoryFile, setInventoryFile] = React.useState<File | null>(null);
+  const [isFileProcessing, setIsFileProcessing] = React.useState(false);
+  const [fileError, setFileError] = React.useState<string | null>(null);
+  const [fileSuccess, setFileSuccess] = React.useState<string | null>(null);
 
   // --- Autocomplete state ---
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [activeSuggestionField, setActiveSuggestionField] = useState<'name' | null>(null);
-  const suggestionRef = useRef<HTMLDivElement>(null);
+  const [suggestions, setSuggestions] = React.useState<string[]>([]);
+  const [activeSuggestionField, setActiveSuggestionField] = React.useState<'name' | null>(null);
+  const suggestionRef = React.useRef<HTMLDivElement>(null);
 
-  const uniqueItemNames = useMemo(() => [...new Set(items.map(item => item.name))], [items]);
+  const uniqueItemNames = React.useMemo(() => [...new Set(items.map(item => item.name))], [items]);
   
-  const loadInventory = useCallback(async () => {
+  const loadInventory = React.useCallback(async () => {
     setIsLoading(true);
     try {
         const inventoryItems = await getAllInventoryItems();
@@ -88,7 +135,7 @@ const InventoryPage: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
+  React.useEffect(() => {
     initDB().then(success => {
         if (success) {
             setDbInitialized(true);
@@ -100,7 +147,7 @@ const InventoryPage: React.FC = () => {
   }, [loadInventory]);
 
   // Effect to handle clicks outside the suggestion box
-  useEffect(() => {
+  React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
         if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
             setActiveSuggestionField(null);
@@ -110,7 +157,7 @@ const InventoryPage: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
   
-  const filteredItems = useMemo(() => {
+  const filteredItems = React.useMemo(() => {
     if (!searchTerm) return items;
     const lowercasedTerm = searchTerm.toLowerCase();
     return items.filter(item =>
@@ -119,7 +166,7 @@ const InventoryPage: React.FC = () => {
     );
   }, [items, searchTerm]);
 
-  const summaryData = useMemo(() => {
+  const summaryData = React.useMemo(() => {
     let totalQuantity = 0;
     let totalValue = 0;
 
@@ -198,8 +245,8 @@ const InventoryPage: React.FC = () => {
       e.preventDefault();
       if (!dbInitialized) return;
 
-      const price = parseFloat(formData.price.replace(',', '.'));
-      const quantity = parseFloat(formData.quantity);
+      const price = robustParseFloat(formData.price);
+      const quantity = robustParseFloat(formData.quantity);
       
       const errors: { price?: string; quantity?: string } = {};
 
@@ -219,7 +266,7 @@ const InventoryPage: React.FC = () => {
       try {
         const newItemData = {
             reference: formData.reference, name: formData.name,
-            quantity: parseInt(formData.quantity, 10), 
+            quantity: quantity, 
             price: price,
             purchaseDate: formData.purchaseDate,
         };
@@ -269,7 +316,6 @@ const InventoryPage: React.FC = () => {
             purchaseDate: ["purchase date", "date d'achat", 'date', 'تاريخ الشراء']
         };
 
-        // Check for headers by inspecting the first row
         const firstRowJson: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 'A1:E1' });
         const firstRowValues = firstRowJson.length > 0 ? firstRowJson[0] : [];
         let hasHeaders = false;
@@ -277,14 +323,11 @@ const InventoryPage: React.FC = () => {
         if (firstRowValues.length > 0) {
             let headerMatches = 0;
             const allPossibleHeaders = new Set(Object.values(headerMapping).flat());
-
             for (const cell of firstRowValues) {
                 if (typeof cell === 'string' && allPossibleHeaders.has(cell.toLowerCase().trim())) {
                     headerMatches++;
                 }
             }
-            
-            // If at least two columns in the first row match known headers, assume it's a header row.
             if (headerMatches >= 2) {
                 hasHeaders = true;
             }
@@ -307,35 +350,6 @@ const InventoryPage: React.FC = () => {
             return undefined;
         };
         
-        const robustParseFloat = (value: any): number => {
-            if (value === null || value === undefined) return 0;
-            if (typeof value === 'number' && !isNaN(value)) {
-                return value;
-            }
-            
-            let str = String(value).trim();
-            str = str.replace(/[^0-9,.-]/g, '');
-        
-            const lastComma = str.lastIndexOf(',');
-            const lastDot = str.lastIndexOf('.');
-        
-            if (lastComma > lastDot) {
-                str = str.replace(/\./g, '').replace(',', '.');
-            } 
-            else {
-                str = str.replace(/,/g, '');
-            }
-        
-            if (!str.includes(',') && str.split('.').length === 2 && str.split('.')[1].length === 3) {
-                 if (!str.startsWith('0.')) {
-                    str = str.replace('.', '');
-                 }
-            }
-        
-            const num = parseFloat(str);
-            return isNaN(num) ? 0 : num;
-        };
-
         let parsedItems: Omit<InventoryItem, 'id'>[];
 
         if (hasHeaders) {
@@ -363,8 +377,8 @@ const InventoryPage: React.FC = () => {
                 }
 
                 return {
-                    reference: referenceKey ? String(row[referenceKey]) : '',
-                    name: nameKey ? String(row[nameKey]) : 'N/A',
+                    reference: referenceKey ? String(row[referenceKey] ?? '') : '',
+                    name: nameKey ? String(row[nameKey] ?? 'N/A') : 'N/A',
                     quantity, price, purchaseDate: dateStr,
                 };
             });
@@ -404,11 +418,13 @@ const InventoryPage: React.FC = () => {
         if (validItems.length === 0) {
             throw new Error(t('fileEmptyError'));
         }
-
+        
+        // Replace the entire inventory with the content of the file
+        await clearInventory();
         await addMultipleInventoryItems(validItems);
         await loadInventory();
 
-        setFileSuccess(t('fileProcessingSuccess'));
+        setFileSuccess(`${validItems.length} ${t('itemsImportedSuccessfully')}`);
         setInventoryFile(null);
         const fileInput = document.getElementById('excel-importer') as HTMLInputElement;
         if(fileInput) fileInput.value = '';

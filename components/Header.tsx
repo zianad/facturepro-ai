@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import * as React from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -18,15 +17,15 @@ const ChevronDownIcon = () => (
 
 const Header: React.FC = () => {
   const { language, setLanguage, t } = useLanguage();
-  const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
+  const [isLangDropdownOpen, setIsLangDropdownOpen] = React.useState(false);
   
-  const langDropdownRef = useRef<HTMLDivElement>(null);
+  const langDropdownRef = React.useRef<HTMLDivElement>(null);
 
   const navLinkClasses = "px-3 py-2 rounded-md text-sm font-medium transition-colors";
   const activeNavLinkClasses = "bg-indigo-50 text-indigo-600";
   const inactiveNavLinkClasses = "text-gray-500 hover:bg-gray-100 hover:text-gray-900";
 
-  useEffect(() => {
+  React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
         if (langDropdownRef.current && !langDropdownRef.current.contains(event.target as Node)) {
             setIsLangDropdownOpen(false);

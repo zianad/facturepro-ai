@@ -1,5 +1,4 @@
-
-import React, { createContext, useState, useContext, ReactNode, useMemo } from 'react';
+import * as React from 'react';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -10,11 +9,11 @@ interface AuthContextType {
   logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = React.useState<User | null>(null);
+  const [loading, setLoading] = React.useState(false);
 
   const login = (userData: Omit<User, 'role'>) => {
     setLoading(true);
@@ -30,7 +29,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(null);
   };
 
-  const isAuthenticated = useMemo(() => !!user, [user]);
+  const isAuthenticated = React.useMemo(() => !!user, [user]);
 
   const value = { user, isAuthenticated, loading, login, logout };
 
@@ -42,7 +41,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 };
 
 export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
+  const context = React.useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }

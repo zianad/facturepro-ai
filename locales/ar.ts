@@ -1,3 +1,4 @@
+
 import { fr } from "./fr";
 
 export const ar: typeof fr = {
@@ -140,5 +141,6 @@ export const ar: typeof fr = {
   quantityToAdd: "الكمية",
   quantityExceedsStock: "الكمية تتجاوز المخزون المتاح.",
   itemAdded: "تمت إضافة العنصر.",
-  noItemsForDateError: "لا توجد عناصر متاحة في المخزون في تاريخ الفاتورة المحدد أو قبله. يرجى اختيار تاريخ لاحق أو إضافة عناصر بتاريخ شراء أقدم."
+  noItemsForDateError: "لا توجد عناصر متاحة في المخزون في تاريخ الفاتورة المحدد أو قبله. يرجى اختيار تاريخ لاحق أو إضافة عناصر بتاريخ شراء أقدم.",
+  itemsImportedSuccessfully: "تم استيراد العناصر بنجاح."
 };
