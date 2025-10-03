@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { GeneratedInvoice, InventoryItem, ProfileData, InvoiceItem } from '../types';
@@ -223,7 +224,6 @@ const InvoicePage: React.FC = () => {
             const headerHtml = `
               <div class="header">
                   <h2>${profile?.companyName || t('companyHeader')}</h2>
-                  <p>${profile?.companyAddress || t('companyInfo')}</p>
               </div>`;
 
             newWindow?.document.write(`<html><head><title>${t('invoice')}</title>${styles}</head><body>`);
@@ -348,12 +348,6 @@ const InvoicePage: React.FC = () => {
                         <div className="p-8 overflow-y-auto" ref={printRef}>
                           <header className="text-center mb-10">
                               <h1 className="text-3xl font-bold uppercase">{profile?.companyName || t('companyHeader')}</h1>
-                              <p className="text-sm">{t('companySubHeader')}</p>
-                              <div className="text-xs text-gray-600 mt-2">
-                                  <p>{t('companyAddressTitle')}: {profile?.companyAddress || t('companyInfo')}</p>
-                                  <p>{profile?.companyPhone || ''}</p>
-                                  <p>{t('companyLegal')}</p>
-                              </div>
                           </header>
                           <div className="flex justify-between items-start mb-6 pb-4 border-b">
                               <div>
@@ -398,9 +392,18 @@ const InvoicePage: React.FC = () => {
                                   </table>
                               </div>
                           </div>
-                          <footer className="mt-20 pt-10 border-t text-center text-xs text-gray-600">
-                              <p>{t('stampAndSignature')}</p>
-                              <p className="mt-4">{t('footerDisclaimer')}</p>
+                          <footer className="mt-20 pt-4 border-t text-center text-xs">
+                              <div className="mb-8">
+                                  <p className="font-bold text-sm mb-4">{t('stampAndSignature')}</p>
+                                  <div className="h-16"></div>
+                              </div>
+                              <div className="bg-gray-50 p-4 rounded-lg">
+                                  <p className="font-semibold text-gray-800">{profile?.companyName || t('companyHeader')}</p>
+                                  <p className="text-gray-600">{t('companyAddressTitle')}: {profile?.companyAddress || t('companyInfo')}</p>
+                                  {profile?.companyPhone && <p className="text-gray-600">{t('companyPhone')}: {profile.companyPhone}</p>}
+                                  <p className="text-gray-500 mt-2 text-[10px]">{t('companyLegal')}</p>
+                              </div>
+                              <p className="mt-4 font-semibold text-gray-700">{t('footerDisclaimer')}</p>
                           </footer>
                         </div>
                     </div>
