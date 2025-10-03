@@ -316,7 +316,7 @@ const InventoryPage: React.FC = () => {
             purchaseDate: ["purchase date", "date d'achat", 'date', 'تاريخ الشراء']
         };
 
-        const firstRowJson: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 'A1:E1' });
+        const firstRowJson: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
         const firstRowValues = firstRowJson.length > 0 ? firstRowJson[0] : [];
         let hasHeaders = false;
         
