@@ -1,5 +1,7 @@
-
 import * as React from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 import { useLanguage } from '../context/LanguageContext';
 import { GeneratedInvoice, InventoryItem, ProfileData, InvoiceItem } from '../types';
 import { initDB, getAllInvoices, deleteInvoiceAndRestock, createInvoiceAndUpdateStock, getAllInventoryItems, getProfile } from '../db';
@@ -9,6 +11,12 @@ const Spinner = () => <svg className="animate-spin h-5 w-5 text-white" xmlns="ht
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
 const EyeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>;
 const PrintIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v3a2 2 0 002 2h8a2 2 0 002-2v-3h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" /></svg>;
+const PdfIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm5 1a1 1 0 00-1 1v1a1 1 0 001 1h2a1 1 0 001-1V6a1 1 0 00-1-1H9z" clipRule="evenodd" /><path d="M15 12H5a1 1 0 000 2h10a1 1 0 000-2z" /></svg>;
+const ExcelIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1-1H3a1 1 0 01-1-1V3zm2 2v10h12V5H4zm5.5 1.5a.5.5 0 00-.5.5v1.293l-1.146-1.147a.5.5 0 00-.708.708l1.147 1.146H6.5a.5.5 0 000 1h1.793L7.146 9.854a.5.5 0 00.708.708L9 9.414V11.5a.5.5 0 001 0V9.414l1.146 1.147a.5.5 0 00.708-.708L10.707 8.5H12.5a.5.5 0 000-1H10.707L11.854 6.354a.5.5 0 00-.708-.708L10 6.793V5.5a.5.5 0 00-.5-.5z" /></svg>;
+
+const sanitizeFilename = (name: string) => {
+  return name.replace(/[\/\\?%*:|"<>]/g, '-');
+};
 
 const InvoicePage: React.FC = () => {
     const { t } = useLanguage();
@@ -33,6 +41,7 @@ const InvoicePage: React.FC = () => {
     const [viewingInvoice, setViewingInvoice] = React.useState<GeneratedInvoice | null>(null);
     const [profile, setProfile] = React.useState<ProfileData | null>(null);
     const printRef = React.useRef<HTMLDivElement>(null);
+    const [isExporting, setIsExporting] = React.useState(false);
     
     const VAT_RATE = 0.20;
 
@@ -236,6 +245,119 @@ const InvoicePage: React.FC = () => {
         }
     };
     
+    const handleDownloadPdf = async () => {
+      if (!viewingInvoice || !printRef.current) return;
+      setIsExporting(true);
+
+      try {
+        const canvas = await html2canvas(printRef.current, {
+            scale: 2, // Higher scale for better quality
+            useCORS: true,
+        });
+        const imgData = canvas.toDataURL('image/png');
+        
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const ratio = canvasWidth / canvasHeight;
+
+        const imgWidth = pdfWidth;
+        const imgHeight = imgWidth / ratio;
+        
+        if (imgHeight > pdfHeight) {
+            // This is a simplified multi-page logic. For very long invoices, a more robust solution would be needed.
+            let position = 0;
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            let remainingHeight = imgHeight;
+
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            remainingHeight -= pageHeight;
+
+            while (remainingHeight > 0) {
+                position = position - pageHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                remainingHeight -= pageHeight;
+            }
+
+        } else {
+            pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+        }
+
+        pdf.save(`${t('invoice')}-${viewingInvoice.invoiceNumber}.pdf`);
+      } catch (error) {
+        console.error("Failed to generate PDF document:", error);
+        alert("Sorry, there was an error creating the PDF document.");
+      } finally {
+        setIsExporting(false);
+      }
+    };
+    
+    const handleDownloadExcel = async () => {
+        if (!viewingInvoice || !profile) return;
+        setIsExporting(true);
+
+        try {
+            // Helper to round numbers to avoid floating point issues
+            const round = (num: number) => Number(num.toFixed(2));
+
+            const header = [
+                t('invoiceReference'),
+                t('description'),
+                t('quantity'),
+                t('invoicePU'),
+                t('invoiceTotalHT')
+            ];
+
+            // Sanitize and round all item data
+            const itemsData = viewingInvoice.items.map(item => [
+                item.reference,
+                item.description,
+                item.quantity,
+                round(item.unitPrice),
+                round(item.total)
+            ]);
+
+            const totalAmount = round(viewingInvoice.totalAmount);
+            const subtotal = round(totalAmount / (1 + VAT_RATE));
+            const vat = round(totalAmount - subtotal);
+
+            const finalData = [
+                [profile.companyName || ''],
+                [profile.companyAddress || ''],
+                [profile.companyPhone || ''],
+                [t('companyLegal') || ''],
+                [],
+                [t('billTo'), '', '', t('invoiceNumber'), viewingInvoice.invoiceNumber],
+                [viewingInvoice.customerName, '', '', t('invoiceDate'), viewingInvoice.invoiceDate],
+                [],
+                header,
+                ...itemsData,
+                [],
+                ['', '', '', t('subtotalHT'), subtotal],
+                ['', '', '', t('vat20'), vat],
+                ['', '', '', t('totalTTC'), totalAmount]
+            ];
+            
+            const ws = XLSX.utils.aoa_to_sheet(finalData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, t('invoice'));
+
+            const safeFilename = sanitizeFilename(`${t('invoice')}-${viewingInvoice.invoiceNumber}.xlsx`);
+            XLSX.writeFile(wb, safeFilename);
+
+        } catch (error) {
+            console.error("Failed to generate Excel document:", error);
+            alert("Sorry, there was an error creating the Excel document.");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+
     const filteredInvoices = React.useMemo(() => {
         if (!searchTerm) return invoices;
         const lowercasedTerm = searchTerm.toLowerCase();
@@ -340,9 +462,20 @@ const InvoicePage: React.FC = () => {
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                         <div className="p-4 border-b flex justify-between items-center no-print">
                             <h2 className="text-xl font-bold">{t('invoice')} #{viewingInvoice.invoiceNumber}</h2>
-                            <div>
-                                <button onClick={handlePrint} className="px-4 py-2 mr-2 text-sm text-white bg-indigo-600 rounded-md inline-flex items-center"><PrintIcon />{t('print')}</button>
-                                <button onClick={() => setViewingInvoice(null)} className="px-4 py-2 text-sm bg-gray-200 rounded-md">{t('close')}</button>
+                            <div className="flex items-center gap-2">
+                                <button onClick={handleDownloadExcel} disabled={isExporting} className="px-4 py-2 text-sm text-white bg-green-600 rounded-md inline-flex items-center hover:bg-green-700 transition-colors disabled:bg-green-400">
+                                    {isExporting ? <Spinner /> : <><ExcelIcon /> {t('downloadExcel')}</>}
+                                </button>
+                                <button onClick={handleDownloadPdf} disabled={isExporting} className="px-4 py-2 text-sm text-white bg-red-600 rounded-md inline-flex items-center hover:bg-red-700 transition-colors disabled:bg-red-400">
+                                    {isExporting ? <Spinner /> : <><PdfIcon /> {t('downloadPdf')}</>}
+                                </button>
+                                <button onClick={handlePrint} disabled={isExporting} className="px-4 py-2 text-sm text-white bg-indigo-600 rounded-md inline-flex items-center hover:bg-indigo-700 transition-colors">
+                                    <PrintIcon />
+                                    {t('print')}
+                                </button>
+                                <button onClick={() => setViewingInvoice(null)} className="px-4 py-2 text-sm bg-gray-200 rounded-md hover:bg-gray-300 transition-colors">
+                                    {t('close')}
+                                </button>
                             </div>
                         </div>
                         <div className="p-8 overflow-y-auto" ref={printRef}>
@@ -392,24 +525,14 @@ const InvoicePage: React.FC = () => {
                                   </table>
                               </div>
                           </div>
-                          <footer className="mt-20 pt-4 border-t text-center text-xs">
-                              <div className="mb-8">
-                                  <p className="font-bold text-sm mb-4">{t('stampAndSignature')}</p>
-                                  <div className="h-16"></div>
-                              </div>
-                              <div className="bg-gray-50 p-4 rounded-lg">
-                                  <p className="font-semibold text-gray-800">{profile?.companyName || t('companyHeader')}</p>
-                                  <p className="text-gray-600">{t('companyAddressTitle')}: {profile?.companyAddress || t('companyInfo')}</p>
-                                  {profile?.companyPhone && <p className="text-gray-600">{t('companyPhone')}: {profile.companyPhone}</p>}
-                                  <p className="text-gray-500 mt-2 text-[10px]">{t('companyLegal')}</p>
-                              </div>
-                              <p className="mt-4 font-semibold text-gray-700">{t('footerDisclaimer')}</p>
-                          </footer>
+                           <footer className="text-center mt-10 pt-4 border-t">
+                               <p className="font-bold">{profile?.companyAddress || t('companyInfo')}</p>
+                               <p className="text-sm">{t('companyLegal')}</p>
+                           </footer>
                         </div>
                     </div>
                 </div>
             )}
-
         </div>
     );
 };

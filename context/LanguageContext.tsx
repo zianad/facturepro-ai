@@ -33,7 +33,6 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <LanguageContext.Provider value={value}>
       {children}
-    {/* FIX: Corrected typo in the closing tag for LanguageContext.Provider. */}
     </LanguageContext.Provider>
   );
 };
