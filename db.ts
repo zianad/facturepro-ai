@@ -1,4 +1,4 @@
-import { GeneratedInvoice, InventoryItem, ProfileData } from './types';
+import { GeneratedInvoice, InventoryItem, ProfileData, InvoiceItem } from './types';
 
 const DB_NAME = 'FactureProDB';
 const DB_VERSION = 1;
@@ -19,9 +19,9 @@ export const initDB = (): Promise<boolean> => {
             const dbInstance = (event.target as IDBOpenDBRequest).result;
             if (!dbInstance.objectStoreNames.contains(INVENTORY_STORE_NAME)) {
                 const inventoryStore = dbInstance.createObjectStore(INVENTORY_STORE_NAME, { keyPath: 'id', autoIncrement: true });
-                // We use an index on 'reference' to look up items when updating stock.
-                // It is not unique to prevent database errors if user data contains duplicates.
                 inventoryStore.createIndex('reference', 'reference', { unique: false });
+                // Add a compound index for efficient lookup
+                inventoryStore.createIndex('ref_name', ['reference', 'name'], { unique: false });
             }
             if (!dbInstance.objectStoreNames.contains(INVOICES_STORE_NAME)) {
                 dbInstance.createObjectStore(INVOICES_STORE_NAME, { keyPath: 'id', autoIncrement: true });
@@ -145,149 +145,222 @@ export const getAllInvoices = (): Promise<GeneratedInvoice[]> => {
     });
 };
 
+const restockStockFromInvoice = async (
+    transaction: IDBTransaction,
+    items: InvoiceItem[]
+): Promise<void> => {
+    const inventoryStore = transaction.objectStore(INVENTORY_STORE_NAME);
+    const inventoryIndex = inventoryStore.index('ref_name');
+
+    for (const item of items) {
+        const key = [item.reference, item.description];
+        const getAllRequest = inventoryIndex.getAll(key);
+
+        const matchingItems: InventoryItem[] = await new Promise((res, rej) => {
+            getAllRequest.onsuccess = () => res(getAllRequest.result);
+            getAllRequest.onerror = () => rej(getAllRequest.error);
+        });
+
+        if (matchingItems.length > 0) {
+            // Add quantity back to the most recent batch of this item
+            matchingItems.sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
+            const latestBatch = matchingItems[0];
+            latestBatch.quantity += item.quantity;
+             await new Promise<void>((res, rej) => {
+                const putRequest = inventoryStore.put(latestBatch);
+                putRequest.onsuccess = () => res();
+                putRequest.onerror = () => rej(putRequest.error);
+            });
+        } else {
+            // If the item was completely depleted and deleted, re-create it.
+            const newItem: Omit<InventoryItem, 'id'> = {
+                reference: item.reference,
+                name: item.description,
+                quantity: item.quantity,
+                price: parseFloat(item.unitPrice.toFixed(2)), // Use invoice price, rounded
+                purchaseDate: new Date().toISOString().split('T')[0],
+            };
+            await new Promise<void>((res, rej) => {
+                const addRequest = inventoryStore.add(newItem);
+                addRequest.onsuccess = () => res();
+                addRequest.onerror = () => rej(addRequest.error);
+            });
+        }
+    }
+};
+
 export const deleteInvoiceAndRestock = (invoiceId: number): Promise<void> => {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([INVOICES_STORE_NAME, INVENTORY_STORE_NAME], 'readwrite');
         const invoiceStore = transaction.objectStore(INVOICES_STORE_NAME);
-        const inventoryStore = transaction.objectStore(INVENTORY_STORE_NAME);
-
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-
-        const getInvoiceRequest = invoiceStore.get(invoiceId);
-
-        getInvoiceRequest.onsuccess = () => {
-            const invoice: GeneratedInvoice | undefined = getInvoiceRequest.result;
-            if (!invoice) {
-                resolve();
-                return;
-            }
-
-            const deleteRequest = invoiceStore.delete(invoiceId);
-            deleteRequest.onsuccess = () => {
-                const inventoryIndex = inventoryStore.index('reference');
-                const processNextItem = (index: number) => {
-                    if (index >= invoice.items.length) return;
-
-                    const itemToRestock = invoice.items[index];
-                    const getStockItemRequest = inventoryIndex.get(itemToRestock.reference);
-                    getStockItemRequest.onsuccess = () => {
-                        const stockItem: InventoryItem | undefined = getStockItemRequest.result;
-                        if (stockItem) {
-                            stockItem.quantity += itemToRestock.quantity;
-                            inventoryStore.put(stockItem).onsuccess = () => processNextItem(index + 1);
-                        } else {
-                            processNextItem(index + 1);
-                        }
-                    };
-                };
-                processNextItem(0);
-            };
-        };
-    });
-};
-
-export const clearAllInvoicesAndRestock = (): Promise<void> => {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([INVOICES_STORE_NAME, INVENTORY_STORE_NAME], 'readwrite');
-        const invoiceStore = transaction.objectStore(INVOICES_STORE_NAME);
-        const inventoryStore = transaction.objectStore(INVENTORY_STORE_NAME);
 
         transaction.oncomplete = () => resolve();
         transaction.onerror = (event) => reject((event.target as IDBTransaction).error);
 
-        const getAllInvoicesRequest = invoiceStore.getAll();
-        getAllInvoicesRequest.onsuccess = () => {
-            const allInvoices: GeneratedInvoice[] = getAllInvoicesRequest.result;
-            if (allInvoices.length === 0) return;
-            
-            const inventoryIndex = inventoryStore.index('reference');
-            const itemsToRestock: { reference: string; quantity: number }[] = allInvoices.flatMap(inv => inv.items);
+        const getInvoiceRequest = invoiceStore.get(invoiceId);
 
-            const processNextItem = (index: number) => {
-                if (index >= itemsToRestock.length) {
-                    invoiceStore.clear();
-                    return;
-                }
-                const itemToRestock = itemsToRestock[index];
-                const getRequest = inventoryIndex.get(itemToRestock.reference);
-                getRequest.onsuccess = () => {
-                    const stockItem: InventoryItem | undefined = getRequest.result;
-                    if (stockItem) {
-                        stockItem.quantity += itemToRestock.quantity;
-                        inventoryStore.put(stockItem).onsuccess = () => processNextItem(index + 1);
-                    } else {
-                        processNextItem(index + 1);
-                    }
-                };
-            };
-            processNextItem(0);
+        getInvoiceRequest.onsuccess = async () => {
+            const invoice: GeneratedInvoice | undefined = getInvoiceRequest.result;
+            if (!invoice) {
+                return reject(new Error(`Invoice with ID ${invoiceId} not found.`));
+            }
+
+            try {
+                await restockStockFromInvoice(transaction, invoice.items);
+                invoiceStore.delete(invoiceId);
+            } catch (error) {
+                console.error("Failed to restock items:", error);
+                transaction.abort();
+                reject(error);
+            }
+        };
+
+        getInvoiceRequest.onerror = () => {
+            transaction.abort();
+            reject(getInvoiceRequest.error);
         };
     });
 };
 
-export const createInvoiceAndUpdateStock = (invoiceData: Omit<GeneratedInvoice, 'id'>): Promise<void> => {
+export const getAvailableInventoryValue = (date: string): Promise<number> => {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([INVOICES_STORE_NAME, INVENTORY_STORE_NAME], 'readwrite');
-        const invoiceStore = transaction.objectStore(INVOICES_STORE_NAME);
+        const VAT_RATE = 0.20;
+        const transaction = db.transaction([INVENTORY_STORE_NAME], 'readonly');
+        const store = transaction.objectStore(INVENTORY_STORE_NAME);
+        const request = store.getAll();
+
+        request.onsuccess = () => {
+            const allInventory: InventoryItem[] = request.result;
+            const availableInventory = allInventory.filter(i =>
+                i.quantity > 0 && new Date(i.purchaseDate) <= new Date(date)
+            );
+            const totalAvailableValueHT = availableInventory.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+            const totalAvailableValueTTC = totalAvailableValueHT * (1 + VAT_RATE);
+            resolve(totalAvailableValueTTC);
+        };
+
+        request.onerror = () => reject(request.error);
+    });
+};
+
+
+export const createInvoiceFromTotal = (
+    invoiceData: {
+        invoiceNumber: string;
+        customerName: string;
+        invoiceDate: string;
+        totalAmount: number; // This is the target TTC
+    }
+): Promise<void> => {
+    return new Promise((resolve, reject) => {
+        const VAT_RATE = 0.20;
+        const transaction = db.transaction([INVENTORY_STORE_NAME, INVOICES_STORE_NAME], 'readwrite');
         const inventoryStore = transaction.objectStore(INVENTORY_STORE_NAME);
+        const invoiceStore = transaction.objectStore(INVOICES_STORE_NAME);
         
-        transaction.oncomplete = () => {
-            console.log("Invoice created and stock updated successfully.");
-            resolve();
-        };
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = (event) => reject((event.target as IDBTransaction).error || new Error("Transaction failed"));
+        
+        const getAllRequest = inventoryStore.getAll();
+        
+        getAllRequest.onsuccess = async () => {
+            try {
+                const allInventory = getAllRequest.result as InventoryItem[];
+                const availableInventory = allInventory.filter(i =>
+                    i.quantity > 0 && new Date(i.purchaseDate) <= new Date(invoiceData.invoiceDate)
+                );
 
-        transaction.onerror = (event) => {
-            const error = (event.target as IDBTransaction).error;
-            console.error("Transaction error:", error);
-            reject(error || new Error('A database transaction error occurred.'));
-        };
-
-        const addInvoiceRequest = invoiceStore.add(invoiceData);
-
-        addInvoiceRequest.onsuccess = () => {
-            const itemsToUpdate = invoiceData.items;
-            if (itemsToUpdate.length === 0) {
-                return;
-            }
-
-            const inventoryIndex = inventoryStore.index('reference');
-
-            const processNextItem = (index: number) => {
-                if (index >= itemsToUpdate.length) {
-                    return;
+                if (availableInventory.length === 0) {
+                    throw new Error("لا توجد عناصر متاحة في المخزون في تاريخ الفاتورة المحدد أو قبله.");
                 }
 
-                const itemToDeduct = itemsToUpdate[index];
-                const getRequest = inventoryIndex.get(itemToDeduct.reference);
+                const totalAvailableValueHT = availableInventory.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+                const totalAvailableValueTTC = totalAvailableValueHT * (1 + VAT_RATE);
 
-                getRequest.onsuccess = () => {
-                    const stockItem: InventoryItem | undefined = getRequest.result;
+                let itemsToSell: { stockItem: InventoryItem; quantityToTake: number }[] = [];
+                const roundedTargetTTC = Math.round(invoiceData.totalAmount * 100);
+                const roundedAvailableTTC = Math.round(totalAvailableValueTTC * 100);
 
-                    if (!stockItem) {
-                        const error = new Error(`Item with reference ${itemToDeduct.reference} was not found in inventory.`);
-                        transaction.abort();
-                        reject(error);
-                        return;
+                if (Math.abs(roundedTargetTTC - roundedAvailableTTC) <= 1) {
+                    itemsToSell = availableInventory.map(item => ({
+                        stockItem: item,
+                        quantityToTake: item.quantity
+                    }));
+                } else {
+                    if (invoiceData.totalAmount > totalAvailableValueTTC) {
+                         throw new Error(`قيمة الفاتورة المطلوبة (${invoiceData.totalAmount.toFixed(2)}) تتجاوز قيمة المخزون المتاح (${totalAvailableValueTTC.toFixed(2)}).`);
                     }
 
-                    if (stockItem.quantity < itemToDeduct.quantity) {
-                        const error = new Error(`Insufficient stock for ${stockItem.name} (Ref: ${stockItem.reference}). Required: ${itemToDeduct.quantity}, Available: ${stockItem.quantity}.`);
-                        transaction.abort();
-                        reject(error);
-                        return;
+                    const targetTotalHT = invoiceData.totalAmount / (1 + VAT_RATE);
+                    let currentTotalHT = 0;
+                    
+                    availableInventory.sort((a, b) => b.price - a.price);
+
+                    for (const stockItem of availableInventory) {
+                        const remainingValueNeeded = targetTotalHT - currentTotalHT;
+                        if (remainingValueNeeded <= 0.001) break;
+
+                        if(stockItem.price <= 0) continue;
+
+                        const maxQtyFromValue = Math.floor(remainingValueNeeded / stockItem.price);
+                        const qtyToTake = Math.min(stockItem.quantity, maxQtyFromValue);
+
+                        if (qtyToTake > 0) {
+                            itemsToSell.push({ stockItem: stockItem, quantityToTake: qtyToTake });
+                            currentTotalHT += qtyToTake * stockItem.price;
+                        }
                     }
+                }
 
-                    stockItem.quantity -= itemToDeduct.quantity;
-                    const putRequest = inventoryStore.put(stockItem);
+                if (itemsToSell.length === 0) {
+                    throw new Error("تعذر إنشاء الفاتورة للمبلغ الإجمالي المحدد. قد يكون المبلغ صغيرًا جدًا بالنسبة للمخزون الحالي.");
+                }
 
-                    putRequest.onsuccess = () => {
-                        processNextItem(index + 1);
-                    };
+                const invoiceItemsMap = new Map<string, InvoiceItem>();
+                let finalActualTotalHT = 0;
+
+                for (const { stockItem, quantityToTake } of itemsToSell) {
+                    const updatedItem = { ...stockItem, quantity: stockItem.quantity - quantityToTake };
+                    inventoryStore.put(updatedItem);
+
+                    const itemValue = quantityToTake * stockItem.price;
+                    finalActualTotalHT += itemValue;
+                    
+                    const key = `${stockItem.reference}::${stockItem.name}::${stockItem.price}`;
+                    const existing = invoiceItemsMap.get(key);
+                    if (existing) {
+                        existing.quantity += quantityToTake;
+                        existing.total += itemValue;
+                    } else {
+                        invoiceItemsMap.set(key, {
+                            reference: stockItem.reference,
+                            description: stockItem.name,
+                            quantity: quantityToTake,
+                            unitPrice: stockItem.price,
+                            total: itemValue,
+                        });
+                    }
+                }
+                
+                const finalInvoiceItems = Array.from(invoiceItemsMap.values());
+                const finalActualTotalTTC = finalActualTotalHT * (1 + VAT_RATE);
+
+                const newInvoice: Omit<GeneratedInvoice, 'id'> = {
+                    ...invoiceData,
+                    totalAmount: finalActualTotalTTC,
+                    items: finalInvoiceItems
                 };
-            };
 
-            processNextItem(0);
+                invoiceStore.add(newInvoice);
+
+            } catch (error) {
+                console.error("Error during invoice creation:", error);
+                transaction.abort();
+            }
+        };
+        
+        getAllRequest.onerror = () => {
+            reject(getAllRequest.error);
         };
     });
 };

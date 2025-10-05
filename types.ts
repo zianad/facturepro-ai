@@ -3,6 +3,7 @@ export interface ProfileData {
   userName: string;
   companyName: string;
   companyICE: string;
+  companyRC: string;
   companyAddress: string;
   companyPhone: string;
 }

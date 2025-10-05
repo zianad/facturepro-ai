@@ -83,6 +83,7 @@ export const fr = {
   yourName: "Votre Nom (Contact)",
   companyName: "Nom de l'entreprise",
   companyICE: "I.C.E de l'entreprise",
+  companyRC: "RC de l'entreprise",
   companyAddress: "Adresse de l'entreprise",
   companyPhone: "Téléphone de l'entreprise",
   saveProfile: "Enregistrer les modifications",
@@ -101,5 +102,23 @@ export const fr = {
   noItemsForDateError: "Aucun article d'inventaire n'est disponible à la date de facturation sélectionnée ou avant. Veuillez choisir une date ultérieure ou ajouter des articles avec des dates d'achat antérieures.",
   itemsImportedSuccessfully: "articles importés avec succès.",
   downloadPdf: "Télécharger PDF",
-  downloadExcel: "Télécharger Excel"
+  downloadWord: "Télécharger Word",
+  inventoryValueExceededError: "La valeur de la facture demandée ({requested} DH) dépasse la valeur totale du stock disponible à cette date ({available} DH).",
+  maxAvailableValue: "Valeur maximale disponible à cette date:",
+  
+  // New keys for the redesigned invoice
+  factureDeVente: "Facture de Vente N:",
+  designation: "Designation",
+  puHT: "PU H.T",
+  montantHT: "Montant H.T",
+  unite: "Unité",
+  remise: "REMISE",
+  totalHTBox: "TOTAL H.T",
+  mtva: "M.T.V.A 20%",
+  totalTTCBox: "TOTAL T.T.C",
+  espece: "Espece",
+  avance: "Avance",
+  rest: "Rest",
+  creditClient: "Credit Client",
+  invoiceSumInWordsPrefix: "ARRETEE LA PRESENTE FACTURE A LA SOMME DE:",
 };

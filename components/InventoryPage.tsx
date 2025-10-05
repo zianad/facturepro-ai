@@ -47,49 +47,43 @@ const SkeletonLoader = () => (
 );
 
 const robustParseFloat = (value: any): number => {
-    if (value == null) return 0;
+    if (value == null || value === '') return 0;
     if (typeof value === 'number') return value;
 
-    let str = String(value).trim();
-    if (str === '') return 0;
-    
-    let strClean = str.replace(/\s/g, ''); // remove spaces
+    let str = String(value).trim().replace(/\s/g, '');
 
-    const lastComma = strClean.lastIndexOf(',');
-    const lastDot = strClean.lastIndexOf('.');
+    const lastComma = str.lastIndexOf(',');
+    const lastDot = str.lastIndexOf('.');
 
-    // If both are present, determine which is the decimal separator
-    if (lastComma > -1 && lastDot > -1) {
-        if (lastComma > lastDot) { // European: 1.500,25
-            strClean = strClean.replace(/\./g, '').replace(',', '.');
-        } else { // US: 1,500.25
-            strClean = strClean.replace(/,/g, '');
-        }
-    } 
-    // If only one type of separator is present
-    else {
-        const separator = lastComma > -1 ? ',' : '.';
-        const sepIndex = Math.max(lastComma, lastDot);
-        const hasOnlyOneSeparator = strClean.indexOf(separator) === strClean.lastIndexOf(separator);
-
-        // Ambiguity: "1,500" or "1.500". Is it 1.5 or 1500?
-        // Heuristic: if it's the only separator and has 3 digits after, it's thousands.
-        if (hasOnlyOneSeparator && strClean.substring(sepIndex + 1).length === 3) {
-            strClean = strClean.replace(separator, '');
+    // If European format is clearly used (comma is the last separator)
+    if (lastComma > lastDot) {
+        str = str.replace(/\./g, '').replace(',', '.');
+    }
+    // If US/UK format is clearly used (dot is the last separator)
+    else if (lastDot > lastComma) {
+        str = str.replace(/,/g, '');
+    }
+    // Ambiguous cases (only one type of separator)
+    // Given the French locale, assume comma is decimal and dot is thousands.
+    else if (lastComma !== -1) { // Only commas are present
+        const commaCount = (str.match(/,/g) || []).length;
+        // Heuristic: if a single comma is not followed by 3 digits, it's a decimal
+        if (commaCount === 1 && str.substring(str.indexOf(',') + 1).length !== 3) {
+            str = str.replace(',', '.');
         } else {
-            // Treat as decimal: "1,5" -> "1.5" or "1,500,000" -> "1500000"
-            if (separator === ',') {
-                 // If there are multiple commas, they are thousand separators
-                if(!hasOnlyOneSeparator) {
-                    strClean = strClean.replace(/,/g, '');
-                } else {
-                    strClean = strClean.replace(',', '.');
-                }
-            }
+            // Otherwise, they are all thousand separators
+            str = str.replace(/,/g, '');
+        }
+    }
+    else if (lastDot !== -1) { // Only dots are present
+        const dotCount = (str.match(/\./g) || []).length;
+        // Heuristic: if multiple dots, or one dot followed by 3 digits, they are thousand separators
+        if (dotCount > 1 || (dotCount === 1 && str.substring(str.indexOf('.') + 1).length === 3)) {
+             str = str.replace(/\./g, '');
         }
     }
 
-    const num = parseFloat(strClean);
+    const num = parseFloat(str);
     return isNaN(num) ? 0 : num;
 };
 

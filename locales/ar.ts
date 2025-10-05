@@ -85,6 +85,7 @@ export const ar: typeof fr = {
   yourName: "اسمك (جهة الاتصال)",
   companyName: "اسم الشركة",
   companyICE: "رقم ICE للشركة",
+  companyRC: "رقم السجل التجاري (RC)",
   companyAddress: "عنوان الشركة",
   companyPhone: "هاتف الشركة",
   saveProfile: "حفظ التغييرات",
@@ -103,5 +104,23 @@ export const ar: typeof fr = {
   noItemsForDateError: "لا توجد عناصر متاحة في المخزون في تاريخ الفاتورة المحدد أو قبله. يرجى اختيار تاريخ لاحق أو إضافة عناصر بتاريخ شراء أقدم.",
   itemsImportedSuccessfully: "تم استيراد العناصر بنجاح.",
   downloadPdf: "تحميل PDF",
-  downloadExcel: "تحميل Excel"
+  downloadWord: "تحميل Word",
+  inventoryValueExceededError: "قيمة الفاتورة المطلوبة ({requested} د.م.) تتجاوز القيمة الإجمالية للمخزون المتاح في هذا التاريخ ({available} د.م.).",
+  maxAvailableValue: "القيمة القصوى المتاحة في هذا التاريخ:",
+  
+  // New keys for the redesigned invoice
+  factureDeVente: "فاتورة بيع رقم:",
+  designation: "البيان",
+  puHT: "السعر الوحدوي د.إ",
+  montantHT: "المبلغ د.إ",
+  unite: "الوحدة",
+  remise: "الخصم",
+  totalHTBox: "المجموع دون احتساب الرسوم",
+  mtva: "ضريبة القيمة المضافة 20%",
+  totalTTCBox: "المجموع شامل الرسوم",
+  espece: "نقدا",
+  avance: "دفعة مقدمة",
+  rest: "الباقي",
+  creditClient: "رصيد العميل",
+  invoiceSumInWordsPrefix: "أوقفت هذه الفاتورة عند مبلغ:",
 };

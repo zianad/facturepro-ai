@@ -1,22 +1,106 @@
+// FIX: Removed invalid text from the start of the file.
 import * as React from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import * as XLSX from 'xlsx';
 import { useLanguage } from '../context/LanguageContext';
 import { GeneratedInvoice, InventoryItem, ProfileData, InvoiceItem } from '../types';
-import { initDB, getAllInvoices, deleteInvoiceAndRestock, createInvoiceAndUpdateStock, getAllInventoryItems, getProfile } from '../db';
+import { initDB, getAllInvoices, deleteInvoiceAndRestock, createInvoiceFromTotal, getProfile, getAvailableInventoryValue } from '../db';
 
 // --- Icons ---
-const Spinner = () => <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
+const Spinner = () => <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
 const EyeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>;
 const PrintIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v3a2 2 0 002 2h8a2 2 0 002-2v-3h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" /></svg>;
 const PdfIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm5 1a1 1 0 00-1 1v1a1 1 0 001 1h2a1 1 0 001-1V6a1 1 0 00-1-1H9z" clipRule="evenodd" /><path d="M15 12H5a1 1 0 000 2h10a1 1 0 000-2z" /></svg>;
-const ExcelIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1-1H3a1 1 0 01-1-1V3zm2 2v10h12V5H4zm5.5 1.5a.5.5 0 00-.5.5v1.293l-1.146-1.147a.5.5 0 00-.708.708l1.147 1.146H6.5a.5.5 0 000 1h1.793L7.146 9.854a.5.5 0 00.708.708L9 9.414V11.5a.5.5 0 001 0V9.414l1.146 1.147a.5.5 0 00.708-.708L10.707 8.5H12.5a.5.5 0 000-1H10.707L11.854 6.354a.5.5 0 00-.708-.708L10 6.793V5.5a.5.5 0 00-.5-.5z" /></svg>;
+const WordIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm4.293 4.293a1 1 0 011.414 0L12 10.586l2.293-2.293a1 1 0 111.414 1.414L13.414 12l2.293 2.293a1 1 0 01-1.414 1.414L12 13.414l-2.293 2.293a1 1 0 01-1.414-1.414L10.586 12 8.293 9.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>;
 
-const sanitizeFilename = (name: string) => {
-  return name.replace(/[\/\\?%*:|"<>]/g, '-');
+const escapeHtml = (unsafe: string | null | undefined): string => {
+    if (!unsafe) return '';
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 };
+
+const formatCurrencyFr = (num: number): string => {
+    return num.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/ /g, '\u00A0');
+};
+
+const numberToWordsFr = (num: number): string => {
+    if (num === 0) return 'ZÉRO';
+
+    const units = ['', 'UN', 'DEUX', 'TROIS', 'QUATRE', 'CINQ', 'SIX', 'SEPT', 'HUIT', 'NEUF'];
+    const teens = ['DIX', 'ONZE', 'DOUZE', 'TREIZE', 'QUATORZE', 'QUINZE', 'SEIZE', 'DIX-SEPT', 'DIX-HUIT', 'DIX-NEUF'];
+    const tens = ['', 'DIX', 'VINGT', 'TRENTE', 'QUARANTE', 'CINQUANTE', 'SOIXANTE', 'SOIXANTE-DIX', 'QUATRE-VINGT', 'QUATRE-VINGT-DIX'];
+
+    const convertChunk = (n: number): string => {
+        if (n === 0) return '';
+        let words = '';
+
+        if (n >= 100) {
+            const hundreds = Math.floor(n / 100);
+            words += (hundreds > 1 ? units[hundreds] + ' ' : '') + 'CENT' + (n % 100 === 0 && hundreds > 1 ? 'S' : '');
+            n %= 100;
+            if (n > 0) words += ' ';
+        }
+
+        if (n > 0) {
+            if (n < 10) {
+                words += units[n];
+            } else if (n < 20) {
+                words += teens[n - 10];
+            } else {
+                const ten = Math.floor(n / 10);
+                const unit = n % 10;
+                if (ten === 7 || ten === 9) { // 70s and 90s
+                    words += tens[ten - 1] + '-' + teens[unit];
+                } else {
+                    words += tens[ten];
+                    if (unit === 1 && ten < 8) { // 21, 31, ... 61
+                        words += ' ET UN';
+                    } else if (unit > 0) {
+                        words += '-' + units[unit];
+                    } else if (ten === 8 && unit === 0) { // 80
+                        words += 'S';
+                    }
+                }
+            }
+        }
+        return words;
+    };
+
+    const integerPart = Math.floor(num);
+    
+    if (integerPart === 0) return 'ZÉRO';
+
+    let result = '';
+    const billions = Math.floor(integerPart / 1000000000);
+    const millions = Math.floor((integerPart % 1000000000) / 1000000);
+    const thousands = Math.floor((integerPart % 1000000) / 1000);
+    const remainder = integerPart % 1000;
+
+    if (billions > 0) {
+        result += convertChunk(billions) + ' MILLIARD' + (billions > 1 ? 'S' : '');
+        if (integerPart % 1000000000 > 0) result += ' ';
+    }
+    if (millions > 0) {
+        result += convertChunk(millions) + ' MILLION' + (millions > 1 ? 'S' : '');
+        if (integerPart % 1000000 > 0) result += ' ';
+    }
+    if (thousands > 0) {
+        if (thousands === 1) result += 'MILLE';
+        else result += convertChunk(thousands) + ' MILLE';
+        if (integerPart % 1000 > 0) result += ' ';
+    }
+    if (remainder > 0) {
+        result += convertChunk(remainder);
+    }
+    
+    return result.trim().replace(/\s-/g, '-');
+};
+
 
 const InvoicePage: React.FC = () => {
     const { t } = useLanguage();
@@ -29,6 +113,8 @@ const InvoicePage: React.FC = () => {
     const [isGeneratingModalOpen, setGeneratingModalOpen] = React.useState(false);
     const [isGenerating, setIsGenerating] = React.useState(false);
     const [generationError, setGenerationError] = React.useState<string | null>(null);
+    const [maxInvoiceValue, setMaxInvoiceValue] = React.useState<number | null>(null);
+    const [isCheckingValue, setIsCheckingValue] = React.useState(false);
     
     const [generationForm, setGenerationForm] = React.useState({
       invoiceNumber: '',
@@ -68,77 +154,32 @@ const InvoicePage: React.FC = () => {
             }
         });
     }, [loadData]);
+
+    React.useEffect(() => {
+        if (isGeneratingModalOpen) {
+            setIsCheckingValue(true);
+            setGenerationError(null);
+            getAvailableInventoryValue(generationForm.invoiceDate)
+                .then(setMaxInvoiceValue)
+                .catch(console.error)
+                .finally(() => setIsCheckingValue(false));
+        }
+    }, [isGeneratingModalOpen, generationForm.invoiceDate]);
     
-    // Algorithm to select items for invoice
-    const selectInvoiceItemsForTotalLocally = (
-      inventory: InventoryItem[],
-      targetTotalTTC: number
-    ): { items: InvoiceItem[], finalTotalTTC: number } => {
-        const targetTotalHT = targetTotalTTC / (1 + VAT_RATE);
-        let currentTotalHT = 0;
-        const selectedItems: InvoiceItem[] = [];
-        const availableItems = inventory.map(item => ({ ...item })); // Create a mutable copy
-
-        if (availableItems.length === 0) return { items: [], finalTotalTTC: 0 };
-        
-        availableItems.sort((a, b) => b.price - a.price);
-
-        const wholesaleQuantities = [100, 50, 24, 12, 6, 1];
-
-        for (const qty of wholesaleQuantities) {
-            for (const item of availableItems) {
-                const neededForTotal = targetTotalHT - currentTotalHT;
-                if (item.quantity > 0 && item.price > 0 && item.price * qty <= neededForTotal) {
-                    const maxPossibleQty = Math.floor(neededForTotal / item.price);
-                    const qtyToAdd = Math.min(item.quantity, maxPossibleQty, qty);
-                    
-                    if (qtyToAdd > 0) {
-                        const existing = selectedItems.find(i => i.reference === item.reference);
-                        if (existing) {
-                            existing.quantity += qtyToAdd;
-                            existing.total += qtyToAdd * item.price;
-                        } else {
-                            selectedItems.push({
-                                reference: item.reference,
-                                description: item.name,
-                                quantity: qtyToAdd,
-                                unitPrice: item.price,
-                                total: qtyToAdd * item.price
-                            });
-                        }
-                        currentTotalHT += qtyToAdd * item.price;
-                        item.quantity -= qtyToAdd;
-                    }
-                }
-            }
-        }
-        
-        const calculatedTotalTTC = currentTotalHT * (1 + VAT_RATE);
-        const difference = targetTotalTTC - calculatedTotalTTC;
-        const differenceHT = difference / (1 + VAT_RATE);
-        
-        if (differenceHT !== 0 && selectedItems.length > 0) {
-            selectedItems.sort((a, b) => b.total - a.total);
-            const mostExpensiveItem = selectedItems[0];
-            const originalTotal = mostExpensiveItem.total;
-            const newTotal = originalTotal + differenceHT;
-            
-            if (newTotal > 0) {
-                mostExpensiveItem.total = newTotal;
-                mostExpensiveItem.unitPrice = newTotal / mostExpensiveItem.quantity;
-            }
-        }
-        
-        const finalTotalHT = selectedItems.reduce((sum, item) => sum + item.total, 0);
-
-        return { items: selectedItems, finalTotalTTC: finalTotalHT * (1 + VAT_RATE) };
-    };
-
     const handleGenerateByTotal = async (e: React.FormEvent) => {
         e.preventDefault();
-        const total = parseFloat(generationForm.totalAmount);
-        if (!generationForm.customerName.trim() || isNaN(total) || total <= 0 || !generationForm.invoiceNumber.trim()) {
+        const targetInvoiceTotalTTC = parseFloat(generationForm.totalAmount);
+        if (!generationForm.customerName.trim() || isNaN(targetInvoiceTotalTTC) || targetInvoiceTotalTTC <= 0 || !generationForm.invoiceNumber.trim()) {
             setGenerationError(t('invoiceCreationError'));
+            return;
+        }
+
+        if (maxInvoiceValue !== null && targetInvoiceTotalTTC > maxInvoiceValue) {
+            setGenerationError(
+                t('inventoryValueExceededError')
+                    .replace('{requested}', targetInvoiceTotalTTC.toFixed(2))
+                    .replace('{available}', maxInvoiceValue.toFixed(2))
+            );
             return;
         }
 
@@ -146,30 +187,13 @@ const InvoicePage: React.FC = () => {
         setGenerationError(null);
         
         try {
-            const inventory = await getAllInventoryItems();
-            const availableInventory = inventory.filter(i => 
-                i.quantity > 0 && new Date(i.purchaseDate) <= new Date(generationForm.invoiceDate)
-            );
-            
-            if (availableInventory.length === 0) {
-                throw new Error(t('noItemsForDateError'));
-            }
-            
-            const { items: invoiceItems, finalTotalTTC } = selectInvoiceItemsForTotalLocally(availableInventory, total);
+            await createInvoiceFromTotal({
+              invoiceNumber: generationForm.invoiceNumber,
+              customerName: generationForm.customerName,
+              invoiceDate: generationForm.invoiceDate,
+              totalAmount: targetInvoiceTotalTTC,
+            });
 
-            if (invoiceItems.length === 0) {
-                throw new Error(t('generateByTotalError'));
-            }
-
-            const newInvoice: Omit<GeneratedInvoice, 'id'> = {
-                invoiceNumber: generationForm.invoiceNumber,
-                customerName: generationForm.customerName,
-                invoiceDate: generationForm.invoiceDate,
-                totalAmount: finalTotalTTC,
-                items: invoiceItems
-            };
-
-            await createInvoiceAndUpdateStock(newInvoice);
             setGeneratingModalOpen(false);
             setGenerationForm({
               invoiceNumber: '', customerName: '', 
@@ -178,17 +202,7 @@ const InvoicePage: React.FC = () => {
             await loadData();
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : String(t('generateByTotalError'));
-            if (errorMessage.includes("Insufficient stock")) {
-              const match = /Insufficient stock for (.*?) \(Ref: (.*?)\). Required: (.*?), Available: (.*?)./.exec(errorMessage);
-              if (match) {
-                  const [, itemName, , required, available] = match;
-                  setGenerationError(t('insufficientStockError').replace('{itemName}', itemName).replace('{required}', required).replace('{available}', available));
-              } else {
-                  setGenerationError(errorMessage);
-              }
-            } else {
-              setGenerationError(errorMessage);
-            }
+            setGenerationError(errorMessage);
         } finally {
             setIsGenerating(false);
         }
@@ -196,8 +210,13 @@ const InvoicePage: React.FC = () => {
 
     const handleDelete = async (id: number) => {
         if (window.confirm(t('confirmDeleteInvoiceAndRestock'))) {
-            await deleteInvoiceAndRestock(id);
-            await loadData();
+            try {
+                await deleteInvoiceAndRestock(id);
+                await loadData();
+            } catch (error) {
+                console.error("Failed to delete invoice and restock:", error);
+                alert(`Error: ${error instanceof Error ? error.message : 'An unknown error occurred'}`);
+            }
         }
     };
 
@@ -208,36 +227,25 @@ const InvoicePage: React.FC = () => {
             const styles = `
               <style>
                 @import url('https://rsms.me/inter/inter.css');
-                body { font-family: 'Inter', sans-serif; margin: 0; }
-                .invoice-container { width: 100%; max-width: 800px; margin: auto; padding: 20px; }
-                .header, .footer { text-align: center; }
-                .details { display: flex; justify-content: space-between; margin: 20px 0; }
-                table { width: 100%; border-collapse: collapse; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; }
-                .totals { float: right; width: 40%; margin-top: 20px; }
-                .totals table { width: 100%; }
-                .totals td:first-child { text-align: right; font-weight: bold; }
-                .page-break { page-break-before: always; }
-                thead.report-header { display: table-header-group; }
-                tfoot { display: table-footer-group; }
+                body { 
+                    font-family: 'Inter', sans-serif; 
+                    margin: 0; 
+                    -webkit-print-color-adjust: exact; 
+                    color-adjust: exact;
+                }
+                .invoice-container { width: 100%; max-width: 800px; margin: auto; padding: 20px; color: #000; }
                 .no-print { display: none; }
                 @media print {
                   .invoice-container { padding: 0; }
-                  thead.report-header { display: table-header-group; }
-                  tbody { page-break-inside: auto; }
-                  tr { page-break-inside: avoid; page-break-after: auto; }
                 }
+                ${printRef.current?.querySelector('style')?.innerHTML ?? ''}
               </style>
             `;
-            const headerHtml = `
-              <div class="header">
-                  <h2>${profile?.companyName || t('companyHeader')}</h2>
-              </div>`;
-
             newWindow?.document.write(`<html><head><title>${t('invoice')}</title>${styles}</head><body>`);
             newWindow?.document.write('<div class="invoice-container">');
-            newWindow?.document.write(printContent.innerHTML.replace('<thead class="report-header">', `<thead class="report-header">${headerHtml}`));
+            // Remove the style block from the innerHTML before writing to avoid duplication
+            const contentHtml = printContent.innerHTML.replace(/<style>[\s\S]*?<\/style>/, '');
+            newWindow?.document.write(contentHtml);
             newWindow?.document.write('</div></body></html>');
             newWindow?.document.close();
             newWindow?.focus();
@@ -258,7 +266,6 @@ const InvoicePage: React.FC = () => {
         
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
         
         const canvasWidth = canvas.width;
         const canvasHeight = canvas.height;
@@ -267,25 +274,7 @@ const InvoicePage: React.FC = () => {
         const imgWidth = pdfWidth;
         const imgHeight = imgWidth / ratio;
         
-        if (imgHeight > pdfHeight) {
-            // This is a simplified multi-page logic. For very long invoices, a more robust solution would be needed.
-            let position = 0;
-            const pageHeight = pdf.internal.pageSize.getHeight();
-            let remainingHeight = imgHeight;
-
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-            remainingHeight -= pageHeight;
-
-            while (remainingHeight > 0) {
-                position = position - pageHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                remainingHeight -= pageHeight;
-            }
-
-        } else {
-            pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-        }
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
 
         pdf.save(`${t('invoice')}-${viewingInvoice.invoiceNumber}.pdf`);
       } catch (error) {
@@ -296,67 +285,138 @@ const InvoicePage: React.FC = () => {
       }
     };
     
-    const handleDownloadExcel = async () => {
+    const loadScript = (src: string): Promise<void> => {
+        return new Promise((resolve, reject) => {
+            if (document.querySelector(`script[src="${src}"]`)) {
+                return resolve();
+            }
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error(`Script load error for ${src}`));
+            document.head.appendChild(script);
+        });
+    };
+    
+    const handleDownloadWord = async () => {
         if (!viewingInvoice || !profile) return;
         setIsExporting(true);
-
+        
         try {
-            // Helper to round numbers to avoid floating point issues
-            const round = (num: number) => Number(num.toFixed(2));
+            await loadScript('https://unpkg.com/html-to-docx@1.8.0/dist/html-to-docx.umd.js');
 
-            const header = [
-                t('invoiceReference'),
-                t('description'),
-                t('quantity'),
-                t('invoicePU'),
-                t('invoiceTotalHT')
-            ];
-
-            // Sanitize and round all item data
-            const itemsData = viewingInvoice.items.map(item => [
-                item.reference,
-                item.description,
-                item.quantity,
-                round(item.unitPrice),
-                round(item.total)
-            ]);
-
-            const totalAmount = round(viewingInvoice.totalAmount);
-            const subtotal = round(totalAmount / (1 + VAT_RATE));
-            const vat = round(totalAmount - subtotal);
-
-            const finalData = [
-                [profile.companyName || ''],
-                [profile.companyAddress || ''],
-                [profile.companyPhone || ''],
-                [t('companyLegal') || ''],
-                [],
-                [t('billTo'), '', '', t('invoiceNumber'), viewingInvoice.invoiceNumber],
-                [viewingInvoice.customerName, '', '', t('invoiceDate'), viewingInvoice.invoiceDate],
-                [],
-                header,
-                ...itemsData,
-                [],
-                ['', '', '', t('subtotalHT'), subtotal],
-                ['', '', '', t('vat20'), vat],
-                ['', '', '', t('totalTTC'), totalAmount]
-            ];
+            const htmlToDocxFunc = (window as any).htmlToDocx;
+            if (typeof htmlToDocxFunc !== 'function') {
+                throw new Error("Word export library failed to load. Please try again.");
+            }
             
-            const ws = XLSX.utils.aoa_to_sheet(finalData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, t('invoice'));
+            const totalHT = viewingInvoice.totalAmount / (1 + VAT_RATE);
+            const totalTVA = viewingInvoice.totalAmount - totalHT;
+            const totalInWords = numberToWordsFr(viewingInvoice.totalAmount);
 
-            const safeFilename = sanitizeFilename(`${t('invoice')}-${viewingInvoice.invoiceNumber}.xlsx`);
-            XLSX.writeFile(wb, safeFilename);
+            const mainContentHTML = `
+                <div style="font-family: Arial, sans-serif; font-size: 10pt; color: #000;">
+                    <header style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="font-size: 20pt; font-weight: bold; margin: 0;">${escapeHtml(profile.companyName)}</h1>
+                    </header>
+                    
+                    <table style="width: 100%; margin-bottom: 20px;">
+                        <tr>
+                            <td style="width: 50%; vertical-align: top;">
+                                <div style="border: 1px solid #000; padding: 10px;">
+                                    <strong>${escapeHtml(t('factureDeVente'))}</strong> ${escapeHtml(viewingInvoice.invoiceNumber)}
+                                </div>
+                            </td>
+                            <td style="width: 50%; vertical-align: top;">
+                                <div style="border: 1px solid #000; padding: 10px; margin-left: 20px;">
+                                    <p style="margin: 0 0 5px 0;"><strong>${escapeHtml(viewingInvoice.customerName)}</strong></p>
+                                    <p style="margin: 0 0 5px 0;"><strong>ICE:</strong> ${escapeHtml(profile.companyICE)}</p>
+                                    <p style="margin: 0;"><strong>RC:</strong> ${escapeHtml(profile.companyRC)}</p>
+                                </div>
+                                <p style="text-align: right; margin-top: 5px;">${escapeHtml(viewingInvoice.invoiceDate)}</p>
+                            </td>
+                        </tr>
+                    </table>
 
+                    <table style="width: 100%; border-collapse: collapse; font-size: 10pt; min-height: 300px;">
+                        <thead style="background-color: #e0e0e0;">
+                            <tr>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">${escapeHtml(t('designation'))}</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">${escapeHtml(t('puHT'))}</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">${escapeHtml(t('quantity'))}</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">${escapeHtml(t('montantHT'))}</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">${escapeHtml(t('unite'))}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${viewingInvoice.items.map(item => `
+                                <tr>
+                                    <td style="border: 1px solid #000; padding: 5px;">${escapeHtml(item.description)}</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">${formatCurrencyFr(item.unitPrice)} DH</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">${item.quantity}</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">${formatCurrencyFr(item.total)} DH</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">kg</td>
+                                </tr>
+                            `).join('')}
+                            <!-- Empty rows to fill space -->
+                            ${Array.from({ length: Math.max(0, 15 - viewingInvoice.items.length) }).map(() => `
+                                <tr>
+                                    <td style="border: 1px solid #000; padding: 5px;">&nbsp;</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">&nbsp;</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">&nbsp;</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">&nbsp;</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">&nbsp;</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+
+                    <table style="width: 100%; margin-top: 10px;">
+                        <tr>
+                            <td style="width: 55%; vertical-align: bottom;">
+                                <div style="margin-bottom: 10px;">${escapeHtml(t('espece'))}</div>
+                                <div style="margin-bottom: 10px;">
+                                    <strong>${escapeHtml(t('avance'))}</strong> ${formatCurrencyFr(viewingInvoice.totalAmount)} DH<br/>
+                                    <strong>${escapeHtml(t('rest'))}</strong> 0,00 DH<br/>
+                                    <strong>${escapeHtml(t('creditClient'))}</strong> 0,00 DH
+                                </div>
+                                <div>
+                                    <p style="font-size: 9pt; margin: 0;"><strong>${escapeHtml(t('invoiceSumInWordsPrefix'))}</strong></p>
+                                    <p style="font-size: 9pt; margin: 0;">${escapeHtml(totalInWords)}</p>
+                                </div>
+                            </td>
+                            <td style="width: 45%; vertical-align: top;">
+                                <table style="width: 100%; border-collapse: collapse;">
+                                    <tr><td style="padding: 5px; border: 1px solid #000; border-radius: 5px;">${escapeHtml(t('totalHTBox'))}</td><td style="padding: 5px; text-align: right; border: 1px solid #000; border-radius: 5px;">${formatCurrencyFr(totalHT)} DH</td></tr>
+                                    <tr><td style="padding: 5px; border: 1px solid #000; border-radius: 5px;">${escapeHtml(t('remise'))}</td><td style="padding: 5px; text-align: right; border: 1px solid #000; border-radius: 5px;">${formatCurrencyFr(0)} DH</td></tr>
+                                    <tr><td style="padding: 5px; border: 1px solid #000; border-radius: 5px;">${escapeHtml(t('mtva'))}</td><td style="padding: 5px; text-align: right; border: 1px solid #000; border-radius: 5px;">${formatCurrencyFr(totalTVA)} DH</td></tr>
+                                    <tr><td style="padding: 5px; border: 1px solid #000; border-radius: 5px;"><strong>${escapeHtml(t('totalTTCBox'))}</strong></td><td style="padding: 5px; text-align: right; border: 1px solid #000; border-radius: 5px;"><strong>${formatCurrencyFr(viewingInvoice.totalAmount)} DH</strong></td></tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                     <div style="margin-top: 30px;">
+                        <strong>Adresse:</strong> ${escapeHtml(profile.companyAddress)}
+                    </div>
+                </div>
+            `;
+            const blobResult = await htmlToDocxFunc(mainContentHTML);
+            const docxBlob = blobResult instanceof Blob ? blobResult : new Blob([blobResult as ArrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(docxBlob);
+            link.download = `${t('invoice')}-${viewingInvoice.invoiceNumber}.docx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
         } catch (error) {
-            console.error("Failed to generate Excel document:", error);
-            alert("Sorry, there was an error creating the Excel document.");
+            const message = error instanceof Error ? error.message : "Sorry, there was an error creating the Word document.";
+            console.error("Failed to generate Word document:", error);
+            alert(message);
         } finally {
             setIsExporting(false);
         }
     };
-
 
     const filteredInvoices = React.useMemo(() => {
         if (!searchTerm) return invoices;
@@ -446,11 +506,20 @@ const InvoicePage: React.FC = () => {
                                     <label htmlFor="targetTotal" className="block text-sm font-medium text-gray-700">{t('targetTotal')}</label>
                                     <input type="number" id="targetTotal" value={generationForm.totalAmount} onChange={e => setGenerationForm(f => ({...f, totalAmount: e.target.value}))} className="mt-1 p-2 w-full border rounded-md" placeholder="15000" required/>
                                 </div>
-                                {generationError && <p className="sm:col-span-2 text-sm text-red-600">{generationError}</p>}
+                                <div className="sm:col-span-2">
+                                    {isCheckingValue ? (
+                                        <p className="text-sm text-gray-500">{t('loading')}...</p>
+                                    ) : maxInvoiceValue !== null ? (
+                                        <div className="text-sm text-gray-600 bg-gray-100 p-2 rounded-md">
+                                            <span className="font-semibold">{t('maxAvailableValue')}</span> {formatCurrencyFr(maxInvoiceValue)} DH
+                                        </div>
+                                    ) : null}
+                                </div>
+                                {generationError && <p className="sm:col-span-2 text-sm text-red-600 p-2 bg-red-50 rounded-md">{generationError}</p>}
                             </fieldset>
                             <div className="p-4 flex justify-end space-x-3 bg-gray-50">
                                 <button type="button" onClick={() => setGeneratingModalOpen(false)} className="px-4 py-2 text-sm bg-white border rounded-md">{t('cancel')}</button>
-                                <button type="submit" disabled={isGenerating} className="px-4 py-2 w-28 flex justify-center text-sm text-white bg-indigo-600 rounded-md disabled:bg-indigo-400">{isGenerating ? <Spinner /> : t('generate')}</button>
+                                <button type="submit" disabled={isGenerating || isCheckingValue} className="px-4 py-2 w-28 flex justify-center text-sm text-white bg-indigo-600 rounded-md disabled:bg-indigo-400">{isGenerating ? <Spinner /> : t('generate')}</button>
                             </div>
                         </form>
                     </div>
@@ -463,8 +532,8 @@ const InvoicePage: React.FC = () => {
                         <div className="p-4 border-b flex justify-between items-center no-print">
                             <h2 className="text-xl font-bold">{t('invoice')} #{viewingInvoice.invoiceNumber}</h2>
                             <div className="flex items-center gap-2">
-                                <button onClick={handleDownloadExcel} disabled={isExporting} className="px-4 py-2 text-sm text-white bg-green-600 rounded-md inline-flex items-center hover:bg-green-700 transition-colors disabled:bg-green-400">
-                                    {isExporting ? <Spinner /> : <><ExcelIcon /> {t('downloadExcel')}</>}
+                                <button onClick={handleDownloadWord} disabled={isExporting} className="px-4 py-2 text-sm text-white bg-blue-600 rounded-md inline-flex items-center hover:bg-blue-700 transition-colors disabled:bg-blue-400">
+                                    {isExporting ? <Spinner /> : <><WordIcon /> {t('downloadWord')}</>}
                                 </button>
                                 <button onClick={handleDownloadPdf} disabled={isExporting} className="px-4 py-2 text-sm text-white bg-red-600 rounded-md inline-flex items-center hover:bg-red-700 transition-colors disabled:bg-red-400">
                                     {isExporting ? <Spinner /> : <><PdfIcon /> {t('downloadPdf')}</>}
@@ -478,57 +547,106 @@ const InvoicePage: React.FC = () => {
                                 </button>
                             </div>
                         </div>
-                        <div className="p-8 overflow-y-auto" ref={printRef}>
-                          <header className="text-center mb-10">
-                              <h1 className="text-3xl font-bold uppercase">{profile?.companyName || t('companyHeader')}</h1>
-                          </header>
-                          <div className="flex justify-between items-start mb-6 pb-4 border-b">
-                              <div>
-                                  <h3 className="font-bold mb-1">{t('billTo')}:</h3>
-                                  <p>{viewingInvoice.customerName}</p>
-                              </div>
-                              <div className="text-right">
-                                  <p><strong>{t('invoiceNumber')}:</strong> {viewingInvoice.invoiceNumber}</p>
-                                  <p><strong>{t('invoiceDate')}:</strong> {viewingInvoice.invoiceDate}</p>
-                              </div>
-                          </div>
-                          <table className="w-full text-sm mb-8">
-                              <thead className="report-header">
-                                  <tr className="bg-gray-100 text-left">
-                                      <th className="p-2">{t('invoiceReference')}</th>
-                                      <th className="p-2">{t('description')}</th>
-                                      <th className="p-2">{t('quantity')}</th>
-                                      <th className="p-2">{t('invoicePU')}</th>
-                                      <th className="p-2">{t('invoiceTotalHT')}</th>
-                                  </tr>
-                              </thead>
-                              <tbody>
-                                  {viewingInvoice.items.map((item, i) => (
-                                      <tr key={i}>
-                                          <td className="p-2 border-b">{item.reference}</td>
-                                          <td className="p-2 border-b">{item.description}</td>
-                                          <td className="p-2 border-b">{item.quantity}</td>
-                                          <td className="p-2 border-b">{item.unitPrice.toFixed(2)}</td>
-                                          <td className="p-2 border-b">{item.total.toFixed(2)}</td>
-                                      </tr>
-                                  ))}
-                              </tbody>
-                          </table>
-                          <div className="flex justify-end">
-                              <div className="w-full max-w-xs">
-                                  <table className="w-full text-sm">
-                                      <tbody>
-                                          <tr><td className="p-2 text-right font-bold">{t('subtotalHT')}:</td><td className="p-2 w-32 text-right">{(viewingInvoice.totalAmount / (1 + VAT_RATE)).toFixed(2)} DH</td></tr>
-                                          <tr><td className="p-2 text-right font-bold">{t('vat20')}:</td><td className="p-2 text-right">{(viewingInvoice.totalAmount - (viewingInvoice.totalAmount / (1 + VAT_RATE))).toFixed(2)} DH</td></tr>
-                                          <tr className="bg-gray-100 font-bold text-lg"><td className="p-2 text-right">{t('totalTTC')}:</td><td className="p-2 text-right">{viewingInvoice.totalAmount.toFixed(2)} DH</td></tr>
-                                      </tbody>
-                                  </table>
-                              </div>
-                          </div>
-                           <footer className="text-center mt-10 pt-4 border-t">
-                               <p className="font-bold">{profile?.companyAddress || t('companyInfo')}</p>
-                               <p className="text-sm">{t('companyLegal')}</p>
-                           </footer>
+                        <div className="p-6 overflow-y-auto" ref={printRef}>
+                            <style>{`
+                                .invoice-box { font-family: Arial, sans-serif; font-size: 10pt; color: #000; }
+                                .invoice-box table { width: 100%; border-collapse: collapse; }
+                                .invoice-box th, .invoice-box td { border: 1px solid #000; padding: 4px; }
+                                .invoice-box .header-table td { border: none; }
+                                .invoice-box .items-table { min-height: 400px; }
+                                .invoice-box .items-table th { background-color: #e0e0e0; font-weight: bold; }
+                                .invoice-box .totals-box { border-radius: 5px; }
+                                .invoice-box .totals-box td { border: 1px solid #000; padding: 5px; }
+                                .invoice-box .no-border { border: none; }
+                                .invoice-box .text-right { text-align: right; }
+                                .invoice-box .font-bold { font-weight: bold; }
+                            `}</style>
+                            <div className="invoice-box">
+                                <header className="text-center mb-8">
+                                    <h1 className="text-2xl font-bold uppercase">{profile?.companyName}</h1>
+                                </header>
+
+                                <table className="header-table mb-5">
+                                    <tbody>
+                                    <tr>
+                                        <td className="w-1/2 align-top">
+                                            <div className="border border-black p-2">
+                                                <strong>{t('factureDeVente')}</strong> {viewingInvoice.invoiceNumber}
+                                            </div>
+                                        </td>
+                                        <td className="w-1/2 align-top pl-5">
+                                            <div className="border border-black p-2">
+                                                <p className="font-bold m-0 mb-1">{viewingInvoice.customerName}</p>
+                                                <p className="m-0 mb-1"><strong>ICE:</strong> {profile?.companyICE}</p>
+                                                <p className="m-0"><strong>RC:</strong> {profile?.companyRC}</p>
+                                            </div>
+                                            <p className="text-right mt-1">{viewingInvoice.invoiceDate}</p>
+                                        </td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+
+                                <table className="items-table">
+                                    <thead>
+                                        <tr>
+                                            <th>{t('designation')}</th>
+                                            <th>{t('puHT')}</th>
+                                            <th>{t('quantity')}</th>
+                                            <th>{t('montantHT')}</th>
+                                            <th>{t('unite')}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {viewingInvoice.items.map((item, i) => (
+                                            <tr key={i}>
+                                                <td>{item.description}</td>
+                                                <td>{formatCurrencyFr(item.unitPrice)} DH</td>
+                                                <td>{item.quantity}</td>
+                                                <td>{formatCurrencyFr(item.total)} DH</td>
+                                                <td>kg</td>
+                                            </tr>
+                                        ))}
+                                        {/* Fill empty rows to ensure consistent table height */}
+                                        {Array.from({ length: Math.max(0, 15 - viewingInvoice.items.length) }).map((_, i) => (
+                                            <tr key={`empty-${i}`}>
+                                                <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+
+                                <table className="mt-4">
+                                  <tbody>
+                                    <tr>
+                                        <td className="w-3/5 align-bottom no-border">
+                                            <div className="mb-3">{t('espece')}</div>
+                                            <div className="mb-4">
+                                                <span><strong>{t('avance')}</strong> {formatCurrencyFr(viewingInvoice.totalAmount)} DH</span><br/>
+                                                <span><strong>{t('rest')}</strong> 0,00 DH</span><br/>
+                                                <span><strong>{t('creditClient')}</strong> 0,00 DH</span>
+                                            </div>
+                                            <div className="text-xs">
+                                                <p className="font-bold m-0">{t('invoiceSumInWordsPrefix')}</p>
+                                                <p className="m-0">{numberToWordsFr(viewingInvoice.totalAmount)}</p>
+                                            </div>
+                                        </td>
+                                        <td className="w-2/5 align-top no-border">
+                                            <table className="totals-box">
+                                                <tbody>
+                                                <tr><td>{t('totalHTBox')}</td><td className="text-right">{formatCurrencyFr(viewingInvoice.totalAmount / (1 + VAT_RATE))} DH</td></tr>
+                                                <tr><td>{t('remise')}</td><td className="text-right">{formatCurrencyFr(0)} DH</td></tr>
+                                                <tr><td>{t('mtva')}</td><td className="text-right">{formatCurrencyFr(viewingInvoice.totalAmount - (viewingInvoice.totalAmount / (1 + VAT_RATE)))} DH</td></tr>
+                                                <tr><td className="font-bold">{t('totalTTCBox')}</td><td className="text-right font-bold">{formatCurrencyFr(viewingInvoice.totalAmount)} DH</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                                <footer className="mt-5">
+                                    <strong>Adresse:</strong> {profile?.companyAddress}
+                                </footer>
+                            </div>
                         </div>
                     </div>
                 </div>
