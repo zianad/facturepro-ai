@@ -145,79 +145,75 @@ export const getAllInvoices = (): Promise<GeneratedInvoice[]> => {
     });
 };
 
-const restockStockFromInvoice = async (
-    transaction: IDBTransaction,
-    items: InvoiceItem[]
-): Promise<void> => {
-    const inventoryStore = transaction.objectStore(INVENTORY_STORE_NAME);
-    const inventoryIndex = inventoryStore.index('ref_name');
-
-    for (const item of items) {
-        const key = [item.reference, item.description];
-        const getAllRequest = inventoryIndex.getAll(key);
-
-        const matchingItems: InventoryItem[] = await new Promise((res, rej) => {
-            getAllRequest.onsuccess = () => res(getAllRequest.result);
-            getAllRequest.onerror = () => rej(getAllRequest.error);
-        });
-
-        if (matchingItems.length > 0) {
-            // Add quantity back to the most recent batch of this item
-            matchingItems.sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
-            const latestBatch = matchingItems[0];
-            latestBatch.quantity += item.quantity;
-             await new Promise<void>((res, rej) => {
-                const putRequest = inventoryStore.put(latestBatch);
-                putRequest.onsuccess = () => res();
-                putRequest.onerror = () => rej(putRequest.error);
-            });
-        } else {
-            // If the item was completely depleted and deleted, re-create it.
-            const newItem: Omit<InventoryItem, 'id'> = {
-                reference: item.reference,
-                name: item.description,
-                quantity: item.quantity,
-                price: parseFloat(item.unitPrice.toFixed(2)), // Use invoice price, rounded
-                purchaseDate: new Date().toISOString().split('T')[0],
-            };
-            await new Promise<void>((res, rej) => {
-                const addRequest = inventoryStore.add(newItem);
-                addRequest.onsuccess = () => res();
-                addRequest.onerror = () => rej(addRequest.error);
-            });
-        }
-    }
-};
-
 export const deleteInvoiceAndRestock = (invoiceId: number): Promise<void> => {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([INVOICES_STORE_NAME, INVENTORY_STORE_NAME], 'readwrite');
         const invoiceStore = transaction.objectStore(INVOICES_STORE_NAME);
+        const inventoryStore = transaction.objectStore(INVENTORY_STORE_NAME);
+        const inventoryIndex = inventoryStore.index('ref_name');
 
         transaction.oncomplete = () => resolve();
         transaction.onerror = (event) => reject((event.target as IDBTransaction).error);
 
         const getInvoiceRequest = invoiceStore.get(invoiceId);
 
-        getInvoiceRequest.onsuccess = async () => {
+        getInvoiceRequest.onerror = () => reject(getInvoiceRequest.error);
+        getInvoiceRequest.onsuccess = () => {
             const invoice: GeneratedInvoice | undefined = getInvoiceRequest.result;
             if (!invoice) {
                 return reject(new Error(`Invoice with ID ${invoiceId} not found.`));
             }
-
-            try {
-                await restockStockFromInvoice(transaction, invoice.items);
-                invoiceStore.delete(invoiceId);
-            } catch (error) {
-                console.error("Failed to restock items:", error);
-                transaction.abort();
-                reject(error);
+            if (invoice.items.length === 0) {
+                invoiceStore.delete(invoiceId); // Just delete and finish
+                return;
             }
-        };
 
-        getInvoiceRequest.onerror = () => {
-            transaction.abort();
-            reject(getInvoiceRequest.error);
+            let pendingOperations = invoice.items.length;
+
+            const operationFailed = (event: Event) => {
+                 if (!transaction.error) {
+                    transaction.abort();
+                    reject((event.target as IDBRequest).error);
+                }
+            };
+            
+            const operationSucceeded = () => {
+                pendingOperations--;
+                if (pendingOperations === 0) {
+                    // Last item restocked, now delete the invoice
+                    invoiceStore.delete(invoiceId);
+                }
+            };
+            
+            invoice.items.forEach(item => {
+                const key = [item.reference, item.description];
+                const getMatchingRequest = inventoryIndex.getAll(key);
+                
+                getMatchingRequest.onerror = operationFailed;
+                getMatchingRequest.onsuccess = () => {
+                    const matchingItems: InventoryItem[] = getMatchingRequest.result;
+                    let writeRequest: IDBRequest;
+
+                    if (matchingItems.length > 0) {
+                        matchingItems.sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
+                        const latestBatch = matchingItems[0];
+                        latestBatch.quantity += item.quantity;
+                        writeRequest = inventoryStore.put(latestBatch);
+
+                    } else {
+                        const newItem: Omit<InventoryItem, 'id'> = {
+                            reference: item.reference,
+                            name: item.description,
+                            quantity: item.quantity,
+                            price: parseFloat(item.unitPrice.toFixed(2)),
+                            purchaseDate: new Date().toISOString().split('T')[0],
+                        };
+                        writeRequest = inventoryStore.add(newItem);
+                    }
+                    writeRequest.onsuccess = operationSucceeded;
+                    writeRequest.onerror = operationFailed;
+                };
+            });
         };
     });
 };
@@ -226,40 +222,84 @@ export const clearAllInvoicesAndRestock = (): Promise<void> => {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([INVOICES_STORE_NAME, INVENTORY_STORE_NAME], 'readwrite');
         const invoiceStore = transaction.objectStore(INVOICES_STORE_NAME);
+        const inventoryStore = transaction.objectStore(INVENTORY_STORE_NAME);
+        const inventoryIndex = inventoryStore.index('ref_name');
 
         transaction.oncomplete = () => resolve();
         transaction.onerror = (event) => reject((event.target as IDBTransaction).error || new Error("Transaction failed during clear invoices and restock."));
 
         const getAllInvoicesRequest = invoiceStore.getAll();
 
-        getAllInvoicesRequest.onsuccess = async () => {
+        getAllInvoicesRequest.onsuccess = () => {
             const allInvoices: GeneratedInvoice[] = getAllInvoicesRequest.result;
             if (allInvoices.length === 0) {
                 return; // Nothing to do, transaction will complete successfully.
             }
 
-            try {
-                const allItemsToRestock: InvoiceItem[] = allInvoices.flatMap(inv => inv.items);
-                
-                const aggregatedItems = new Map<string, InvoiceItem>();
-                for (const item of allItemsToRestock) {
-                    const key = `${item.reference}::${item.description}`;
-                    const existing = aggregatedItems.get(key);
-                    if (existing) {
-                        existing.quantity += item.quantity;
-                    } else {
-                        aggregatedItems.set(key, { ...item });
-                    }
+            const allItemsToRestock: InvoiceItem[] = allInvoices.flatMap(inv => inv.items);
+            const aggregatedItems = new Map<string, InvoiceItem>();
+            for (const item of allItemsToRestock) {
+                const key = `${item.reference}::${item.description}`;
+                const existing = aggregatedItems.get(key);
+                if (existing) {
+                    existing.quantity += item.quantity;
+                } else {
+                    aggregatedItems.set(key, { ...item });
                 }
-
-                await restockStockFromInvoice(transaction, Array.from(aggregatedItems.values()));
-                invoiceStore.clear();
-
-            } catch (error) {
-                console.error("Failed during the restock process of clearing all invoices:", error);
-                transaction.abort();
-                reject(error);
             }
+
+            const itemsToProcess = Array.from(aggregatedItems.values());
+            let pendingOperations = itemsToProcess.length;
+
+            if (pendingOperations === 0) {
+                invoiceStore.clear(); // Clear invoices even if they had no items.
+                return;
+            }
+
+            const operationFailed = (event: Event) => {
+                if (!transaction.error) { // Avoid multiple rejects
+                    transaction.abort();
+                    reject((event.target as IDBRequest).error);
+                }
+            };
+            
+            const operationSucceeded = () => {
+                pendingOperations--;
+                if (pendingOperations === 0) {
+                    // This is the last successful inventory update, now we can safely clear invoices.
+                    invoiceStore.clear();
+                }
+            };
+
+            itemsToProcess.forEach(item => {
+                const key = [item.reference, item.description];
+                const getMatchingRequest = inventoryIndex.getAll(key);
+                
+                getMatchingRequest.onerror = operationFailed;
+                getMatchingRequest.onsuccess = () => {
+                    const matchingItems: InventoryItem[] = getMatchingRequest.result;
+                    let writeRequest: IDBRequest;
+
+                    if (matchingItems.length > 0) {
+                        matchingItems.sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
+                        const latestBatch = matchingItems[0];
+                        latestBatch.quantity += item.quantity;
+                        writeRequest = inventoryStore.put(latestBatch);
+
+                    } else {
+                        const newItem: Omit<InventoryItem, 'id'> = {
+                            reference: item.reference,
+                            name: item.description,
+                            quantity: item.quantity,
+                            price: parseFloat(item.unitPrice.toFixed(2)),
+                            purchaseDate: new Date().toISOString().split('T')[0],
+                        };
+                        writeRequest = inventoryStore.add(newItem);
+                    }
+                    writeRequest.onsuccess = operationSucceeded;
+                    writeRequest.onerror = operationFailed;
+                };
+            });
         };
 
         getAllInvoicesRequest.onerror = () => {
