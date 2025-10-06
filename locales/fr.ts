@@ -113,7 +113,6 @@ export const fr = {
   designation: "Designation",
   puHT: "PU H.T",
   montantHT: "Montant H.T",
-  unite: "Unité",
   remise: "REMISE",
   totalHTBox: "TOTAL H.T",
   mtva: "M.T.V.A 20%",

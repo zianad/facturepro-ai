@@ -1,622 +1,678 @@
+// FIX: Removed invalid text from the start of the file.
 import * as React from 'react';
-import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { useLanguage } from '../context/LanguageContext';
-import { InventoryItem } from '../types';
-import { initDB, getAllInventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem, addMultipleInventoryItems, clearInventory } from '../db';
+import { GeneratedInvoice, InventoryItem, ProfileData, InvoiceItem } from '../types';
+import { initDB, getAllInvoices, deleteInvoiceAndRestock, createInvoiceFromTotal, getProfile, getAvailableInventoryValue, clearAllInvoicesAndRestock } from '../db';
 
 // --- Icons ---
-const BoxIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-14L4 7v10l8 4m0-14L4 7" /></svg>;
-const CollectionIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2H5a2 2 0 00-2 2v2m14 0H5" /></svg>;
-const CashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
-const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>;
-const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
 const Spinner = () => <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
+const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
+const EyeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>;
+const PrintIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v3a2 2 0 002 2h8a2 2 0 002-2v-3h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" /></svg>;
+const PdfIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm5 1a1 1 0 00-1 1v1a1 1 0 001 1h2a1 1 0 001-1V6a1 1 0 00-1-1H9z" clipRule="evenodd" /><path d="M15 12H5a1 1 0 000 2h10a1 1 0 000-2z" /></svg>;
+const WordIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm4.293 4.293a1 1 0 011.414 0L12 10.586l2.293-2.293a1 1 0 111.414 1.414L13.414 12l2.293 2.293a1 1 0 01-1.414 1.414L12 13.414l-2.293 2.293a1 1 0 01-1.414-1.414L10.586 12 8.293 9.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>;
 
-// --- Modal Form Icons ---
-const ReferenceIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5a2 2 0 012 2v5a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2zm0 14h.01M7 17h5a2 2 0 012 2v5a2 2 0 01-2 2H7a2 2 0 01-2-2v-5a2 2 0 012-2z" /></svg>;
-const ItemNameIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-14L4 7v10l8 4m0-14L4 7" /></svg>;
-const DateIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
-const PriceIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V6m0 12v-2m0-4H9m6 0h-3" /></svg>;
-const QuantityIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l3-3m0 0l3 3m-3-3v8m0-13H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H9z" /></svg>;
-
-
-// --- Components ---
-const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode }> = ({ title, value, icon }) => (
-  <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex items-center space-x-4">
-    <div className="bg-gray-100 p-3 rounded-full">{icon}</div>
-    <div>
-        <p className="text-sm text-gray-500 font-medium">{title}</p>
-        <p className="text-2xl font-bold text-gray-800">{value}</p>
-    </div>
-  </div>
-);
-
-const SkeletonLoader = () => (
-    <tbody>
-        {Array.from({ length: 5 }).map((_, i) => (
-            <tr key={i} className="bg-white border-b animate-pulse">
-                <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded"></div></td>
-                <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded"></div></td>
-                <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded"></div></td>
-                <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded"></div></td>
-                <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded"></div></td>
-                <td className="px-6 py-4 text-right space-x-2"><div className="h-4 w-16 bg-gray-200 rounded inline-block"></div></td>
-            </tr>
-        ))}
-    </tbody>
-);
-
-const robustParseFloat = (value: any): number => {
-    if (value == null || value === '') return 0;
-    if (typeof value === 'number') return value;
-
-    let str = String(value).trim().replace(/\s/g, '');
-
-    const lastComma = str.lastIndexOf(',');
-    const lastDot = str.lastIndexOf('.');
-
-    // If European format is clearly used (comma is the last separator)
-    if (lastComma > lastDot) {
-        str = str.replace(/\./g, '').replace(',', '.');
-    }
-    // If US/UK format is clearly used (dot is the last separator)
-    else if (lastDot > lastComma) {
-        str = str.replace(/,/g, '');
-    }
-    // Ambiguous cases (only one type of separator)
-    // Given the French locale, assume comma is decimal and dot is thousands.
-    else if (lastComma !== -1) { // Only commas are present
-        const commaCount = (str.match(/,/g) || []).length;
-        // Heuristic: if a single comma is not followed by 3 digits, it's a decimal
-        if (commaCount === 1 && str.substring(str.indexOf(',') + 1).length !== 3) {
-            str = str.replace(',', '.');
-        } else {
-            // Otherwise, they are all thousand separators
-            str = str.replace(/,/g, '');
-        }
-    }
-    else if (lastDot !== -1) { // Only dots are present
-        const dotCount = (str.match(/\./g) || []).length;
-        // Heuristic: if multiple dots, or one dot followed by 3 digits, they are thousand separators
-        if (dotCount > 1 || (dotCount === 1 && str.substring(str.indexOf('.') + 1).length === 3)) {
-             str = str.replace(/\./g, '');
-        }
-    }
-
-    const num = parseFloat(str);
-    return isNaN(num) ? 0 : num;
+const escapeHtml = (unsafe: string | null | undefined): string => {
+    if (!unsafe) return '';
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 };
 
-const InventoryPage: React.FC = () => {
-  const { t } = useLanguage();
-  const [items, setItems] = React.useState<InventoryItem[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [dbInitialized, setDbInitialized] = React.useState(false);
-  const [searchTerm, setSearchTerm] = React.useState('');
+const formatCurrencyFr = (num: number): string => {
+    return num.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/ /g, '\u00A0');
+};
 
-  const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [currentItem, setCurrentItem] = React.useState<InventoryItem | null>(null);
-  
-  const defaultFormData = {
-    reference: '', name: '', price: '', quantity: '1',
-    purchaseDate: new Date().toISOString().split('T')[0],
-  };
-  const [formData, setFormData] = React.useState(defaultFormData);
-  const [formErrors, setFormErrors] = React.useState<{ price?: string; quantity?: string }>({});
-  const [isSaving, setIsSaving] = React.useState(false);
-  
-  const [inventoryFile, setInventoryFile] = React.useState<File | null>(null);
-  const [isFileProcessing, setIsFileProcessing] = React.useState(false);
-  const [fileError, setFileError] = React.useState<string | null>(null);
-  const [fileSuccess, setFileSuccess] = React.useState<string | null>(null);
+const numberToWordsFr = (num: number): string => {
+    if (num === 0) return 'ZÉRO';
 
-  // --- Autocomplete state ---
-  const [suggestions, setSuggestions] = React.useState<string[]>([]);
-  const [activeSuggestionField, setActiveSuggestionField] = React.useState<'name' | null>(null);
-  const suggestionRef = React.useRef<HTMLDivElement>(null);
+    const units = ['', 'UN', 'DEUX', 'TROIS', 'QUATRE', 'CINQ', 'SIX', 'SEPT', 'HUIT', 'NEUF'];
+    const teens = ['DIX', 'ONZE', 'DOUZE', 'TREIZE', 'QUATORZE', 'QUINZE', 'SEIZE', 'DIX-SEPT', 'DIX-HUIT', 'DIX-NEUF'];
+    const tens = ['', 'DIX', 'VINGT', 'TRENTE', 'QUARANTE', 'CINQUANTE', 'SOIXANTE', 'SOIXANTE-DIX', 'QUATRE-VINGT', 'QUATRE-VINGT-DIX'];
 
-  const uniqueItemNames = React.useMemo(() => [...new Set(items.map(item => item.name))], [items]);
-  
-  const loadInventory = React.useCallback(async () => {
-    setIsLoading(true);
-    try {
-        const inventoryItems = await getAllInventoryItems();
-        setItems(inventoryItems.sort((a, b) => b.id - a.id));
-    } catch (error) {
-        console.error("Failed to load inventory from DB:", error);
-    } finally {
-        setIsLoading(false);
-    }
-  }, []);
+    const convertChunk = (n: number): string => {
+        if (n === 0) return '';
+        let words = '';
 
-  React.useEffect(() => {
-    initDB().then(success => {
-        if (success) {
-            setDbInitialized(true);
-            loadInventory();
-        } else {
-            setIsLoading(false);
+        if (n >= 100) {
+            const hundreds = Math.floor(n / 100);
+            words += (hundreds > 1 ? units[hundreds] + ' ' : '') + 'CENT' + (n % 100 === 0 && hundreds > 1 ? 'S' : '');
+            n %= 100;
+            if (n > 0) words += ' ';
         }
-    });
-  }, [loadInventory]);
 
-  // Effect to handle clicks outside the suggestion box
-  React.useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-        if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
-            setActiveSuggestionField(null);
+        if (n > 0) {
+            if (n < 10) {
+                words += units[n];
+            } else if (n < 20) {
+                words += teens[n - 10];
+            } else {
+                const ten = Math.floor(n / 10);
+                const unit = n % 10;
+                if (ten === 7 || ten === 9) { // 70s and 90s
+                    words += tens[ten - 1] + '-' + teens[unit];
+                } else {
+                    words += tens[ten];
+                    if (unit === 1 && ten < 8) { // 21, 31, ... 61
+                        words += ' ET UN';
+                    } else if (unit > 0) {
+                        words += '-' + units[unit];
+                    } else if (ten === 8 && unit === 0) { // 80
+                        words += 'S';
+                    }
+                }
+            }
         }
+        return words;
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-  
-  const filteredItems = React.useMemo(() => {
-    if (!searchTerm) return items;
-    const lowercasedTerm = searchTerm.toLowerCase();
-    return items.filter(item =>
-      item.name.toLowerCase().includes(lowercasedTerm) ||
-      item.reference.toLowerCase().includes(lowercasedTerm)
-    );
-  }, [items, searchTerm]);
 
-  const summaryData = React.useMemo(() => {
-    let totalQuantity = 0;
-    let totalValue = 0;
+    const integerPart = Math.floor(num);
+    
+    if (integerPart === 0) return 'ZÉRO';
 
-    for (const item of items) {
-      const quantity = Number(item.quantity) || 0;
-      const price = Number(item.price) || 0;
-      totalQuantity += quantity;
-      totalValue += quantity * price;
+    let result = '';
+    const billions = Math.floor(integerPart / 1000000000);
+    const millions = Math.floor((integerPart % 1000000000) / 1000000);
+    const thousands = Math.floor((integerPart % 1000000) / 1000);
+    const remainder = integerPart % 1000;
+
+    if (billions > 0) {
+        result += convertChunk(billions) + ' MILLIARD' + (billions > 1 ? 'S' : '');
+        if (integerPart % 1000000000 > 0) result += ' ';
+    }
+    if (millions > 0) {
+        result += convertChunk(millions) + ' MILLION' + (millions > 1 ? 'S' : '');
+        if (integerPart % 1000000 > 0) result += ' ';
+    }
+    if (thousands > 0) {
+        if (thousands === 1) result += 'MILLE';
+        else result += convertChunk(thousands) + ' MILLE';
+        if (integerPart % 1000 > 0) result += ' ';
+    }
+    if (remainder > 0) {
+        result += convertChunk(remainder);
     }
     
-    return {
-      uniqueCount: items.length,
-      totalQuantity,
-      totalValue: totalValue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    };
-  }, [items]);
-
-
-  const openModal = (item: InventoryItem | null = null) => {
-    setCurrentItem(item);
-    setFormErrors({});
-    setFormData(item ? { 
-        name: item.name, 
-        quantity: String(item.quantity), 
-        price: String(item.price),
-        reference: item.reference,
-        purchaseDate: item.purchaseDate,
-    } : defaultFormData);
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    if (isSaving) return;
-    setIsModalOpen(false);
-    setCurrentItem(null);
-    setFormErrors({});
-    setActiveSuggestionField(null);
-  };
-
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-
-    // Handle Autocomplete
-    if (name === 'name') {
-        if (value) {
-            const filteredSuggestions = uniqueItemNames.filter(s => 
-                s.toLowerCase().includes(value.toLowerCase())
-            );
-            setSuggestions(filteredSuggestions);
-            setActiveSuggestionField(name);
-        } else {
-            setSuggestions([]);
-            setActiveSuggestionField(null);
-        }
-    }
-
-    if (formErrors[name as keyof typeof formErrors]) {
-        setFormErrors(prev => {
-            const newErrors = {...prev};
-            delete newErrors[name as keyof typeof formErrors];
-            return newErrors;
-        });
-    }
-  };
-
-  const handleSuggestionClick = (suggestion: string) => {
-    if (activeSuggestionField) {
-        setFormData(prev => ({ ...prev, [activeSuggestionField]: suggestion }));
-    }
-    setSuggestions([]);
-    setActiveSuggestionField(null);
-  };
-  
-  const handleSaveFromModal = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!dbInitialized) return;
-
-      const price = robustParseFloat(formData.price);
-      const quantity = robustParseFloat(formData.quantity);
-      
-      const errors: { price?: string; quantity?: string } = {};
-
-      if (isNaN(price) || price < 0) {
-        errors.price = t('pricePositiveError');
-      }
-      if (isNaN(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
-        errors.quantity = t('quantityPositiveIntegerError');
-      }
-
-      setFormErrors(errors);
-      if (Object.keys(errors).length > 0) {
-        return;
-      }
-      
-      setIsSaving(true);
-      try {
-        const newItemData = {
-            reference: formData.reference, name: formData.name,
-            quantity: quantity, 
-            price: price,
-            purchaseDate: formData.purchaseDate,
-        };
-
-        if (currentItem) {
-            await updateInventoryItem({ ...currentItem, ...newItemData });
-        } else {
-            await addInventoryItem(newItemData);
-        }
-        await loadInventory();
-        closeModal();
-      } catch (error) {
-        console.error("Failed to save item:", error);
-      } finally {
-        setIsSaving(false);
-      }
-  }
-
-  const handleDelete = async (id: number) => {
-    if (window.confirm(t('confirmDeleteMessage'))) {
-      if (!dbInitialized) return;
-      await deleteInventoryItem(id);
-      await loadInventory();
-    }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFileError(null); setFileSuccess(null);
-    setInventoryFile(e.target.files?.[0] || null);
-  };
-
-  const handleProcessFile = async () => {
-    if (!inventoryFile || !dbInitialized) return;
-    setIsFileProcessing(true); setFileError(null); setFileSuccess(null);
-    try {
-        const data = await inventoryFile.arrayBuffer();
-        const workbook = XLSX.read(data);
-        const sheetName = workbook.SheetNames[0];
-        if (!sheetName) throw new Error("The Excel file is empty.");
-        const worksheet = workbook.Sheets[sheetName];
-
-        const headerMapping: { [key: string]: string[] } = {
-            reference: ['reference', 'référence', 'ref', 'id', 'المرجع', 'code'],
-            name: ['name', 'nom', 'designation', 'désignation', 'description', 'article', 'produit', 'الاسم', 'الوصف', 'libelle'],
-            quantity: ['quantity', 'quantité', 'qte', 'qté', 'quantite', 'الكمية', 'stock'],
-            price: ['price', 'prix', 'prix unitaire', 'pu', 'p.u', 'السعر', 'tarif'],
-            purchaseDate: ["purchase date", "date d'achat", 'date', 'تاريخ الشراء']
-        };
-
-        const firstRowJson: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        const firstRowValues = firstRowJson.length > 0 ? firstRowJson[0] : [];
-        let hasHeaders = false;
-        
-        if (firstRowValues.length > 0) {
-            let headerMatches = 0;
-            const allPossibleHeaders = new Set(Object.values(headerMapping).flat());
-            for (const cell of firstRowValues) {
-                if (typeof cell === 'string' && allPossibleHeaders.has(cell.toLowerCase().trim())) {
-                    headerMatches++;
-                }
-            }
-            if (headerMatches >= 2) {
-                hasHeaders = true;
-            }
-        }
-        
-        const jsonData: any[] = hasHeaders 
-            ? XLSX.utils.sheet_to_json(worksheet) 
-            : XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-        if (jsonData.length === 0) {
-            throw new Error(t('fileEmptyError'));
-        }
-        
-        const findHeaderKey = (row: any, targetKey: string): string | undefined => {
-            const possibleHeaders = headerMapping[targetKey];
-            for (const header of possibleHeaders) {
-                const foundKey = Object.keys(row).find(k => k.toLowerCase().trim() === header);
-                if (foundKey) return foundKey;
-            }
-            return undefined;
-        };
-        
-        let parsedItems: Omit<InventoryItem, 'id'>[];
-
-        if (hasHeaders) {
-            parsedItems = jsonData.map((row: any) => {
-                const referenceKey = findHeaderKey(row, 'reference');
-                const nameKey = findHeaderKey(row, 'name');
-                const quantityKey = findHeaderKey(row, 'quantity');
-                const priceKey = findHeaderKey(row, 'price');
-                const purchaseDateKey = findHeaderKey(row, 'purchaseDate');
-                
-                const quantity = Math.round(robustParseFloat(quantityKey ? row[quantityKey] : 0));
-                const price = robustParseFloat(priceKey ? row[priceKey] : 0);
-                
-                let dateStr = new Date().toISOString().split('T')[0];
-                if (purchaseDateKey && row[purchaseDateKey]) {
-                    if (typeof row[purchaseDateKey] === 'number') {
-                        const excelDate = new Date(Math.round((row[purchaseDateKey] - 25569) * 86400 * 1000));
-                        dateStr = excelDate.toISOString().split('T')[0];
-                    } else if (typeof row[purchaseDateKey] === 'string') {
-                        const parsedDate = new Date(row[purchaseDateKey]);
-                        if (!isNaN(parsedDate.getTime())) {
-                            dateStr = parsedDate.toISOString().split('T')[0];
-                        }
-                    }
-                }
-
-                return {
-                    reference: referenceKey ? String(row[referenceKey] ?? '') : '',
-                    name: nameKey ? String(row[nameKey] ?? 'N/A') : 'N/A',
-                    quantity, price, purchaseDate: dateStr,
-                };
-            });
-        } else {
-            // No headers, process as array of arrays, assuming column order: Ref, Name, Qty, Price, Date
-            parsedItems = (jsonData as any[][]).map((row: any[]) => {
-                if (row.length === 0 || row.every(cell => cell === null || cell === undefined || String(cell).trim() === '')) {
-                    return null; // Skip empty rows
-                }
-                const quantity = Math.round(robustParseFloat(row[2] || 0));
-                const price = robustParseFloat(row[3] || 0);
-                
-                let dateStr = new Date().toISOString().split('T')[0];
-                const rawDate = row[4];
-                if (rawDate) {
-                    if (typeof rawDate === 'number') {
-                        const excelDate = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
-                        dateStr = excelDate.toISOString().split('T')[0];
-                    } else if (typeof rawDate === 'string') {
-                        const parsedDate = new Date(rawDate);
-                        if (!isNaN(parsedDate.getTime())) {
-                            dateStr = parsedDate.toISOString().split('T')[0];
-                        }
-                    }
-                }
-                
-                return {
-                    reference: String(row[0] || ''),
-                    name: String(row[1] || 'N/A'),
-                    quantity, price, purchaseDate: dateStr
-                };
-            }).filter(item => item !== null) as Omit<InventoryItem, 'id'>[]; // Filter out empty rows
-        }
-        
-        const validItems = parsedItems.filter(item => item && item.name && item.name.trim() !== 'N/A' && item.name.trim() !== '' && item.reference && item.reference.trim() !== '');
-
-        if (validItems.length === 0) {
-            throw new Error(t('fileEmptyError'));
-        }
-        
-        // Replace the entire inventory with the content of the file
-        await clearInventory();
-        await addMultipleInventoryItems(validItems);
-        await loadInventory();
-
-        setFileSuccess(`${validItems.length} ${t('itemsImportedSuccessfully')}`);
-        setInventoryFile(null);
-        const fileInput = document.getElementById('excel-importer') as HTMLInputElement;
-        if(fileInput) fileInput.value = '';
-
-    } catch (err) {
-      console.error("File processing error:", err);
-      setFileError(err instanceof Error ? err.message : String(t('fileProcessingError')));
-    } finally {
-      setIsFileProcessing(false);
-    }
-  };
-
-
-  const handleClearInventory = async () => {
-    if (window.confirm(t('confirmClearInventory'))) {
-        if (!dbInitialized) return;
-        await clearInventory();
-        await loadInventory();
-    }
-  };
-  
-  return (
-    <div className="container mx-auto p-4 sm:p-6">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">{t('inventoryPageTitle')}</h1>
-
-      {/* Summary Section */}
-      <div className="bg-white p-4 rounded-lg shadow-md mb-6 border border-gray-200">
-          <h2 className="text-xl font-semibold mb-4 text-gray-700">{t('inventorySummaryTitle')}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard title={t('totalUniqueItems')} value={summaryData.uniqueCount} icon={<BoxIcon />} />
-            <StatCard title={t('totalItemQuantity')} value={summaryData.totalQuantity} icon={<CollectionIcon />}/>
-            <StatCard title={t('totalInventoryValue')} value={`${summaryData.totalValue} DH`} icon={<CashIcon />}/>
-          </div>
-      </div>
-      
-      {/* Actions Section */}
-       <div className="bg-white p-4 rounded-lg shadow-md mb-6 border border-gray-200">
-           <h2 className="text-xl font-semibold mb-4 text-gray-700">{t('actions')}</h2>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <p className="text-md font-semibold text-gray-600 mb-2">{t('addNewItem')}</p>
-                    <button onClick={() => openModal()} className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-all shadow-sm hover:shadow-md disabled:bg-indigo-400" disabled={!dbInitialized}>{t('addItem')}</button>
-                </div>
-                 <div>
-                    <p className="text-md font-semibold text-gray-600 mb-2">{t('importFromExcel')}</p>
-                    <p className="text-xs text-gray-500 mb-3">{t('importInstructions')}</p>
-                    <div className="flex items-center space-x-2">
-                         <input type="file" id="excel-importer" onChange={handleFileSelect} accept=".xlsx,.xls,.csv,.txt" className="hidden"/>
-                         <label htmlFor="excel-importer" className="cursor-pointer px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 inline-flex items-center shadow-sm hover:shadow-md">
-                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                            {t('selectAFile')}
-                         </label>
-                        {inventoryFile && <span className="text-sm text-gray-600 flex-1 truncate">{inventoryFile.name}</span>}
-                    </div>
-                    {inventoryFile && (
-                         <button onClick={handleProcessFile} disabled={isFileProcessing || !dbInitialized} className="mt-3 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-indigo-400">
-                            {isFileProcessing ? <Spinner /> : t('uploadAndProcess')}
-                        </button>
-                    )}
-                    {fileError && <p className="mt-2 text-sm text-red-600">{fileError}</p>}
-                    {fileSuccess && <p className="mt-2 text-sm text-green-600">{fileSuccess}</p>}
-                </div>
-           </div>
-       </div>
-
-
-      {/* Current Inventory Table Card */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 mb-6">
-        <div className="p-4 flex flex-col sm:flex-row justify-between items-center border-b border-gray-200 bg-gray-50">
-            <h2 className="text-xl font-semibold text-gray-700 mb-2 sm:mb-0">{t('currentInventoryTitle')} ({items.length})</h2>
-            <input type="text" placeholder={t('searchPlaceholder') ?? 'Search...'} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="p-2 border border-gray-300 rounded-md shadow-sm w-full sm:w-64"/>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left text-gray-600">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-100">
-              <tr>
-                <th scope="col" className="px-6 py-3">{t('reference')}</th>
-                <th scope="col" className="px-6 py-3">{t('itemNameLabel')}</th>
-                <th scope="col" className="px-6 py-3">{t('quantityLabel')}</th>
-                <th scope="col" className="px-6 py-3">{t('unitPriceLabel')}</th>
-                <th scope="col" className="px-6 py-3">{t('purchaseDate')}</th>
-                <th scope="col" className="px-6 py-3 text-right">{t('actions')}</th>
-              </tr>
-            </thead>
-            {isLoading ? <SkeletonLoader /> : (
-            <tbody>
-              {filteredItems.length > 0 ? filteredItems.map(item => (
-                <tr key={item.id} className="bg-white border-b hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-gray-800">{item.reference}</td>
-                  <td className="px-6 py-4 font-bold text-gray-900">{item.name}</td>
-                  <td className="px-6 py-4">{item.quantity}</td>
-                  <td className="px-6 py-4">{item.price.toFixed(2)} DH</td>
-                  <td className="px-6 py-4">{item.purchaseDate}</td>
-                  <td className="px-6 py-4 text-right space-x-3 whitespace-nowrap">
-                    <button onClick={() => openModal(item)} className="text-indigo-600 hover:text-indigo-800 transition-colors" title={t('edit')}><EditIcon /></button>
-                    <button onClick={() => handleDelete(item.id)} className="text-red-600 hover:text-red-800 transition-colors" title={t('delete')}><TrashIcon /></button>
-                  </td>
-                </tr>
-              )) : (
-                <tr><td colSpan={6} className="text-center py-12 text-gray-500">
-                    <h3 className="text-lg font-medium">{searchTerm ? t('noItemsFound') : t('emptyInventoryMessage')}</h3>
-                    {!searchTerm && <button onClick={() => openModal()} className="mt-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">{t('addNewItem')}</button>}
-                </td></tr>
-              )}
-            </tbody>
-            )}
-          </table>
-        </div>
-      </div>
-
-      {/* Danger Zone */}
-      <div className="bg-red-50 p-4 rounded-lg shadow-md mb-6 border border-red-300">
-          <h2 className="text-xl font-semibold mb-4 text-red-800">{t('dangerZone')}</h2>
-          <div>
-              <p className="text-md font-semibold text-gray-700 mb-2">{t('clearInventoryTitle')}</p>
-              <p className="text-xs text-red-700 mb-3">{t('clearInventoryDescription')}</p>
-              <button 
-                  onClick={handleClearInventory}
-                  className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-all shadow-sm hover:shadow-md disabled:bg-red-400 disabled:cursor-not-allowed" 
-                  disabled={!dbInitialized || items.length === 0}
-              >
-                  {t('clearInventoryButton')}
-              </button>
-          </div>
-      </div>
-
-      {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 z-40 flex justify-center items-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg animate-fade-in-up">
-            <form onSubmit={handleSaveFromModal} autoComplete="off">
-              <div className="p-5 border-b"><h2 className="text-xl font-bold text-gray-900">{currentItem ? t('editItemModalTitle') : t('addItemModalTitle')}</h2></div>
-              <fieldset disabled={isSaving}>
-                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  
-                  <div className="sm:col-span-2">
-                    <label htmlFor="reference" className="block text-sm font-medium text-gray-700 mb-1">{t('reference')}</label>
-                    <div className="flex rounded-md shadow-sm">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500"><ReferenceIcon /></span>
-                      <input type="text" name="reference" id="reference" value={formData.reference} onChange={handleFormChange} className="flex-1 block w-full rounded-none rounded-r-md p-2.5 border border-gray-300 bg-white text-gray-900 focus:ring-indigo-500 focus:border-indigo-500" required />
-                    </div>
-                  </div>
-                  
-                  <div className="sm:col-span-2 relative" ref={activeSuggestionField === 'name' ? suggestionRef : null}>
-                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">{t('itemNameLabel')}</label>
-                    <div className="flex rounded-md shadow-sm">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500"><ItemNameIcon /></span>
-                      <input type="text" name="name" id="name" value={formData.name} onChange={handleFormChange} className="flex-1 block w-full rounded-none rounded-r-md p-2.5 border border-gray-300 bg-white text-gray-900 focus:ring-indigo-500 focus:border-indigo-500" required />
-                    </div>
-                     {activeSuggestionField === 'name' && suggestions.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
-                            {suggestions.map((s, index) => (
-                                <div key={index} onClick={() => handleSuggestionClick(s)} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">{s}</div>
-                            ))}
-                        </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">{t('unitPriceLabel')}</label>
-                    <div className="flex rounded-md shadow-sm">
-                        <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500"><PriceIcon /></span>
-                        <input type="text" name="price" id="price" value={formData.price} onChange={handleFormChange} className={`flex-1 block w-full rounded-none rounded-r-md p-2.5 border ${formErrors.price ? 'border-red-500' : 'border-gray-300'} bg-white text-gray-900 focus:ring-indigo-500 focus:border-indigo-500`} required />
-                    </div>
-                    {formErrors.price && <p className="text-red-500 text-xs mt-1">{formErrors.price}</p>}
-                  </div>
-
-                  <div>
-                    <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-1">{t('quantityLabel')}</label>
-                    <div className="flex rounded-md shadow-sm">
-                        <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500"><QuantityIcon /></span>
-                        <input type="number" step="1" min="1" name="quantity" id="quantity" value={formData.quantity} onChange={handleFormChange} className={`flex-1 block w-full rounded-none rounded-r-md p-2.5 border ${formErrors.quantity ? 'border-red-500' : 'border-gray-300'} bg-white text-gray-900 focus:ring-indigo-500 focus:border-indigo-500`} required />
-                    </div>
-                    {formErrors.quantity && <p className="text-red-500 text-xs mt-1">{formErrors.quantity}</p>}
-                  </div>
-                  
-                  <div className="sm:col-span-2">
-                    <label htmlFor="purchaseDate" className="block text-sm font-medium text-gray-700 mb-1">{t('purchaseDate')}</label>
-                     <div className="flex rounded-md shadow-sm">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500"><DateIcon /></span>
-                      <input type="date" name="purchaseDate" id="purchaseDate" value={formData.purchaseDate} onChange={handleFormChange} className="flex-1 block w-full rounded-none rounded-r-md p-2.5 border border-gray-300 bg-white text-gray-900 focus:ring-indigo-500 focus:border-indigo-500" required />
-                    </div>
-                  </div>
-
-                </div>
-              </fieldset>
-              <div className="p-4 flex justify-end space-x-3 bg-gray-50 rounded-b-lg">
-                <button type="button" onClick={closeModal} disabled={isSaving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:bg-gray-200">{t('cancel')}</button>
-                <button type="submit" disabled={isSaving} className="px-4 py-2 w-24 flex justify-center items-center text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-indigo-400">
-                    {isSaving ? <Spinner /> : t('save')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    return result.trim().replace(/\s-/g, '-');
 };
 
-export default InventoryPage;
+
+const InvoicePage: React.FC = () => {
+    const { t } = useLanguage();
+    const [invoices, setInvoices] = React.useState<GeneratedInvoice[]>([]);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [dbInitialized, setDbInitialized] = React.useState(false);
+    const [searchTerm, setSearchTerm] = React.useState('');
+    
+    // For Generating Invoice by Total
+    const [isGeneratingModalOpen, setGeneratingModalOpen] = React.useState(false);
+    const [isGenerating, setIsGenerating] = React.useState(false);
+    const [generationError, setGenerationError] = React.useState<string | null>(null);
+    const [maxInvoiceValue, setMaxInvoiceValue] = React.useState<number | null>(null);
+    const [isCheckingValue, setIsCheckingValue] = React.useState(false);
+    
+    const [generationForm, setGenerationForm] = React.useState({
+      invoiceNumber: '',
+      customerName: '',
+      invoiceDate: new Date().toISOString().split('T')[0],
+      totalAmount: ''
+    });
+
+    // For Viewing Invoice
+    const [viewingInvoice, setViewingInvoice] = React.useState<GeneratedInvoice | null>(null);
+    const [profile, setProfile] = React.useState<ProfileData | null>(null);
+    const printRef = React.useRef<HTMLDivElement>(null);
+    const [isExporting, setIsExporting] = React.useState(false);
+    
+    const VAT_RATE = 0.20;
+
+    const loadData = React.useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const [invoiceList, profileData] = await Promise.all([getAllInvoices(), getProfile()]);
+            setInvoices(invoiceList.sort((a, b) => b.id - a.id));
+            setProfile(profileData);
+        } catch (error) {
+            console.error("Failed to load data from DB:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    React.useEffect(() => {
+        initDB().then(success => {
+            if (success) {
+                setDbInitialized(true);
+                loadData();
+            } else {
+                setIsLoading(false);
+            }
+        });
+    }, [loadData]);
+
+    React.useEffect(() => {
+        if (isGeneratingModalOpen) {
+            setIsCheckingValue(true);
+            setGenerationError(null);
+            getAvailableInventoryValue(generationForm.invoiceDate)
+                .then(setMaxInvoiceValue)
+                .catch(console.error)
+                .finally(() => setIsCheckingValue(false));
+        }
+    }, [isGeneratingModalOpen, generationForm.invoiceDate]);
+    
+    const handleGenerateByTotal = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const targetInvoiceTotalTTC = parseFloat(generationForm.totalAmount);
+        if (!generationForm.customerName.trim() || isNaN(targetInvoiceTotalTTC) || targetInvoiceTotalTTC <= 0 || !generationForm.invoiceNumber.trim()) {
+            setGenerationError(t('invoiceCreationError'));
+            return;
+        }
+
+        if (maxInvoiceValue !== null && targetInvoiceTotalTTC > maxInvoiceValue) {
+            setGenerationError(
+                t('inventoryValueExceededError')
+                    .replace('{requested}', targetInvoiceTotalTTC.toFixed(2))
+                    .replace('{available}', maxInvoiceValue.toFixed(2))
+            );
+            return;
+        }
+
+        setIsGenerating(true);
+        setGenerationError(null);
+        
+        try {
+            await createInvoiceFromTotal({
+              invoiceNumber: generationForm.invoiceNumber,
+              customerName: generationForm.customerName,
+              invoiceDate: generationForm.invoiceDate,
+              totalAmount: targetInvoiceTotalTTC,
+            });
+
+            setGeneratingModalOpen(false);
+            setGenerationForm({
+              invoiceNumber: '', customerName: '', 
+              invoiceDate: new Date().toISOString().split('T')[0], totalAmount: ''
+            });
+            await loadData();
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : String(t('generateByTotalError'));
+            setGenerationError(errorMessage);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleDelete = async (id: number) => {
+        if (window.confirm(t('confirmDeleteInvoiceAndRestock'))) {
+            try {
+                await deleteInvoiceAndRestock(id);
+                await loadData();
+            } catch (error) {
+                console.error("Failed to delete invoice and restock:", error);
+                alert(`Error: ${error instanceof Error ? error.message : 'An unknown error occurred'}`);
+            }
+        }
+    };
+    
+    const handleClearInvoices = async () => {
+      if (window.confirm(t('confirmClearInvoices'))) {
+          if (!dbInitialized) return;
+          try {
+              await clearAllInvoicesAndRestock();
+              await loadData();
+          } catch (error) {
+              console.error("Failed to clear all invoices:", error);
+              alert(`Error: ${error instanceof Error ? error.message : 'An unknown error occurred'}`);
+          }
+      }
+    };
+
+    const handlePrint = () => {
+        const printContent = printRef.current;
+        if (printContent) {
+            const newWindow = window.open('', '_blank', 'height=800,width=800');
+            const styles = `
+              <style>
+                @import url('https://rsms.me/inter/inter.css');
+                body { 
+                    font-family: 'Inter', sans-serif; 
+                    margin: 0; 
+                    -webkit-print-color-adjust: exact; 
+                    color-adjust: exact;
+                }
+                .invoice-container { width: 100%; max-width: 800px; margin: auto; padding: 20px; color: #000; }
+                .no-print { display: none; }
+                @media print {
+                  .invoice-container { padding: 0; }
+                }
+                ${printRef.current?.querySelector('style')?.innerHTML ?? ''}
+              </style>
+            `;
+            newWindow?.document.write(`<html><head><title>${t('invoice')}</title>${styles}</head><body>`);
+            newWindow?.document.write('<div class="invoice-container">');
+            // Remove the style block from the innerHTML before writing to avoid duplication
+            const contentHtml = printContent.innerHTML.replace(/<style>[\s\S]*?<\/style>/, '');
+            newWindow?.document.write(contentHtml);
+            newWindow?.document.write('</div></body></html>');
+            newWindow?.document.close();
+            newWindow?.focus();
+            setTimeout(() => newWindow?.print(), 500);
+        }
+    };
+    
+    const handleDownloadPdf = async () => {
+      if (!viewingInvoice || !printRef.current) return;
+      setIsExporting(true);
+
+      try {
+        const canvas = await html2canvas(printRef.current, {
+            scale: 2, // Higher scale for better quality
+            useCORS: true,
+        });
+        const imgData = canvas.toDataURL('image/png');
+        
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const ratio = canvasWidth / canvasHeight;
+
+        const imgWidth = pdfWidth;
+        const imgHeight = imgWidth / ratio;
+        
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+        pdf.save(`${t('invoice')}-${viewingInvoice.invoiceNumber}.pdf`);
+      } catch (error) {
+        console.error("Failed to generate PDF document:", error);
+        alert("Sorry, there was an error creating the PDF document.");
+      } finally {
+        setIsExporting(false);
+      }
+    };
+    
+    const loadScript = (src: string): Promise<void> => {
+        return new Promise((resolve, reject) => {
+            if (document.querySelector(`script[src="${src}"]`)) {
+                return resolve();
+            }
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error(`Script load error for ${src}`));
+            document.head.appendChild(script);
+        });
+    };
+    
+    const handleDownloadWord = async () => {
+        if (!viewingInvoice || !profile) return;
+        setIsExporting(true);
+        
+        try {
+            await loadScript('https://unpkg.com/html-to-docx@1.8.0/dist/html-to-docx.umd.js');
+
+            const htmlToDocxFunc = (window as any).htmlToDocx;
+            if (typeof htmlToDocxFunc !== 'function') {
+                throw new Error("Word export library failed to load. Please try again.");
+            }
+            
+            const totalHT = viewingInvoice.totalAmount / (1 + VAT_RATE);
+            const totalTVA = viewingInvoice.totalAmount - totalHT;
+            const totalInWords = numberToWordsFr(viewingInvoice.totalAmount);
+
+            const mainContentHTML = `
+                <div style="font-family: Arial, sans-serif; font-size: 10pt; color: #000;">
+                    <header style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="font-size: 20pt; font-weight: bold; margin: 0;">${escapeHtml(profile.companyName)}</h1>
+                    </header>
+                    
+                    <table style="width: 100%; margin-bottom: 20px;">
+                        <tr>
+                            <td style="width: 50%; vertical-align: top;">
+                                <div style="border: 1px solid #000; padding: 10px;">
+                                    <strong>${escapeHtml(t('factureDeVente'))}</strong> ${escapeHtml(viewingInvoice.invoiceNumber)}
+                                </div>
+                            </td>
+                            <td style="width: 50%; vertical-align: top;">
+                                <div style="border: 1px solid #000; padding: 10px; margin-left: 20px;">
+                                    <p style="margin: 0 0 5px 0;"><strong>${escapeHtml(viewingInvoice.customerName)}</strong></p>
+                                </div>
+                                <p style="text-align: right; margin-top: 5px;">${escapeHtml(viewingInvoice.invoiceDate)}</p>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <table style="width: 100%; border-collapse: collapse; font-size: 10pt; min-height: 300px;">
+                        <thead style="background-color: #e0e0e0;">
+                            <tr>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">${escapeHtml(t('designation'))}</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">${escapeHtml(t('puHT'))}</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">${escapeHtml(t('quantity'))}</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">${escapeHtml(t('montantHT'))}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${viewingInvoice.items.map(item => `
+                                <tr>
+                                    <td style="border: 1px solid #000; padding: 5px;">${escapeHtml(item.description)}</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">${formatCurrencyFr(item.unitPrice)} DH</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">${item.quantity}</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">${formatCurrencyFr(item.total)} DH</td>
+                                </tr>
+                            `).join('')}
+                            <!-- Empty rows to fill space -->
+                            ${Array.from({ length: Math.max(0, 15 - viewingInvoice.items.length) }).map(() => `
+                                <tr>
+                                    <td style="border: 1px solid #000; padding: 5px;">&nbsp;</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">&nbsp;</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">&nbsp;</td>
+                                    <td style="border: 1px solid #000; padding: 5px;">&nbsp;</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+
+                    <table style="width: 100%; margin-top: 10px;">
+                        <tr>
+                            <td style="width: 55%; vertical-align: bottom;">
+                                <div style="margin-bottom: 10px;">${escapeHtml(t('espece'))}</div>
+                                <div style="margin-bottom: 10px;">
+                                    <strong>${escapeHtml(t('avance'))}</strong> ${formatCurrencyFr(viewingInvoice.totalAmount)} DH<br/>
+                                    <strong>${escapeHtml(t('rest'))}</strong> 0,00 DH<br/>
+                                    <strong>${escapeHtml(t('creditClient'))}</strong> 0,00 DH
+                                </div>
+                                <div>
+                                    <p style="font-size: 9pt; margin: 0;"><strong>${escapeHtml(t('invoiceSumInWordsPrefix'))}</strong></p>
+                                    <p style="font-size: 9pt; margin: 0;">${escapeHtml(totalInWords)}</p>
+                                </div>
+                            </td>
+                            <td style="width: 45%; vertical-align: top;">
+                                <table style="width: 100%; border-collapse: collapse;">
+                                    <tr><td style="padding: 5px; border: 1px solid #000; border-radius: 5px;">${escapeHtml(t('totalHTBox'))}</td><td style="padding: 5px; text-align: right; border: 1px solid #000; border-radius: 5px;">${formatCurrencyFr(totalHT)} DH</td></tr>
+                                    <tr><td style="padding: 5px; border: 1px solid #000; border-radius: 5px;">${escapeHtml(t('remise'))}</td><td style="padding: 5px; text-align: right; border: 1px solid #000; border-radius: 5px;">${formatCurrencyFr(0)} DH</td></tr>
+                                    <tr><td style="padding: 5px; border: 1px solid #000; border-radius: 5px;">${escapeHtml(t('mtva'))}</td><td style="padding: 5px; text-align: right; border: 1px solid #000; border-radius: 5px;">${formatCurrencyFr(totalTVA)} DH</td></tr>
+                                    <tr><td style="padding: 5px; border: 1px solid #000; border-radius: 5px;"><strong>${escapeHtml(t('totalTTCBox'))}</strong></td><td style="padding: 5px; text-align: right; border: 1px solid #000; border-radius: 5px;"><strong>${formatCurrencyFr(viewingInvoice.totalAmount)} DH</strong></td></tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                     <div style="margin-top: 30px;">
+                        <strong>Adresse:</strong> ${escapeHtml(profile.companyAddress)}
+                    </div>
+                </div>
+            `;
+            const blobResult = await htmlToDocxFunc(mainContentHTML);
+            const docxBlob = blobResult instanceof Blob ? blobResult : new Blob([blobResult as ArrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(docxBlob);
+            link.download = `${t('invoice')}-${viewingInvoice.invoiceNumber}.docx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Sorry, there was an error creating the Word document.";
+            console.error("Failed to generate Word document:", error);
+            alert(message);
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const filteredInvoices = React.useMemo(() => {
+        if (!searchTerm) return invoices;
+        const lowercasedTerm = searchTerm.toLowerCase();
+        return invoices.filter(inv =>
+            inv.customerName.toLowerCase().includes(lowercasedTerm) ||
+            inv.invoiceNumber.toLowerCase().includes(lowercasedTerm)
+        );
+    }, [invoices, searchTerm]);
+    
+    return (
+        <div className="container mx-auto p-4 sm:p-6">
+            <h1 className="text-3xl font-bold mb-6 text-gray-800">{t('invoices')}</h1>
+            
+            <div className="grid grid-cols-1 gap-6 mb-6">
+                <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <h2 className="text-xl font-semibold mb-2 text-gray-700">{t('createInvoiceTitle')}</h2>
+                    <p className="text-sm text-gray-500 mb-4">{t('generateInvoiceByTotal')}</p>
+                    <button onClick={() => setGeneratingModalOpen(true)} className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-all shadow-sm hover:shadow-md disabled:bg-indigo-400" disabled={!dbInitialized}>
+                        {t('createNewInvoice')}
+                    </button>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
+                <div className="p-4 flex flex-col sm:flex-row justify-between items-center border-b bg-gray-50">
+                    <h2 className="text-xl font-semibold text-gray-700 mb-2 sm:mb-0">{t('invoiceHistoryTitle')} ({invoices.length})</h2>
+                    <input type="text" placeholder={t('searchByClientOrInvoice') ?? 'Search...'} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="p-2 border rounded-md shadow-sm w-full sm:w-64"/>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-gray-600">
+                         <thead className="text-xs text-gray-700 uppercase bg-gray-100">
+                             <tr>
+                                <th className="px-6 py-3">{t('invoiceNumber')}</th>
+                                <th className="px-6 py-3">{t('clientName')}</th>
+                                <th className="px-6 py-3">{t('invoiceDate')}</th>
+                                <th className="px-6 py-3">{t('totalAmountTTC')}</th>
+                                <th className="px-6 py-3 text-right">{t('actions')}</th>
+                             </tr>
+                         </thead>
+                         <tbody>
+                            {isLoading ? (
+                                <tr><td colSpan={5} className="text-center py-10">{t('loading')}...</td></tr>
+                            ) : filteredInvoices.length > 0 ? (
+                                filteredInvoices.map(inv => (
+                                    <tr key={inv.id} className="bg-white border-b hover:bg-gray-50">
+                                        <td className="px-6 py-4 font-medium">{inv.invoiceNumber}</td>
+                                        <td className="px-6 py-4 font-bold">{inv.customerName}</td>
+                                        <td className="px-6 py-4">{inv.invoiceDate}</td>
+                                        <td className="px-6 py-4">{inv.totalAmount.toFixed(2)} DH</td>
+                                        <td className="px-6 py-4 text-right space-x-3">
+                                            <button onClick={() => setViewingInvoice(inv)} className="text-indigo-600 hover:text-indigo-800"><EyeIcon /></button>
+                                            <button onClick={() => handleDelete(inv.id)} className="text-red-600 hover:text-red-800"><TrashIcon /></button>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr><td colSpan={5} className="text-center py-12 text-gray-500">
+                                    <h3 className="text-lg font-medium">{searchTerm ? t('noInvoicesFound') : t('emptyInvoicesMessage')}</h3>
+                                    {!searchTerm && <button onClick={() => setGeneratingModalOpen(true)} className="mt-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">{t('createNewInvoice')}</button>}
+                                </td></tr>
+                            )}
+                         </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {isGeneratingModalOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 z-40 flex justify-center items-center p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+                        <form onSubmit={handleGenerateByTotal}>
+                            <div className="p-5 border-b"><h2 className="text-xl font-bold">{t('createInvoiceTitle')}</h2></div>
+                            <fieldset disabled={isGenerating} className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="sm:col-span-2">
+                                    <label htmlFor="invoiceNumber" className="block text-sm font-medium text-gray-700">{t('invoiceNumber')}</label>
+                                    <input type="text" id="invoiceNumber" value={generationForm.invoiceNumber} onChange={e => setGenerationForm(f => ({...f, invoiceNumber: e.target.value}))} className="mt-1 p-2 w-full border rounded-md" required/>
+                                </div>
+                                 <div className="sm:col-span-2">
+                                    <label htmlFor="customerName" className="block text-sm font-medium text-gray-700">{t('clientName')}</label>
+                                    <input type="text" id="customerName" value={generationForm.customerName} onChange={e => setGenerationForm(f => ({...f, customerName: e.target.value}))} className="mt-1 p-2 w-full border rounded-md" required/>
+                                </div>
+                                <div>
+                                    <label htmlFor="invoiceDate" className="block text-sm font-medium text-gray-700">{t('invoiceDate')}</label>
+                                    <input type="date" id="invoiceDate" value={generationForm.invoiceDate} onChange={e => setGenerationForm(f => ({...f, invoiceDate: e.target.value}))} className="mt-1 p-2 w-full border rounded-md" required/>
+                                </div>
+                                <div>
+                                    <label htmlFor="targetTotal" className="block text-sm font-medium text-gray-700">{t('targetTotal')}</label>
+                                    <input type="number" id="targetTotal" value={generationForm.totalAmount} onChange={e => setGenerationForm(f => ({...f, totalAmount: e.target.value}))} className="mt-1 p-2 w-full border rounded-md" placeholder="15000" required/>
+                                </div>
+                                <div className="sm:col-span-2">
+                                    {isCheckingValue ? (
+                                        <p className="text-sm text-gray-500">{t('loading')}...</p>
+                                    ) : maxInvoiceValue !== null ? (
+                                        <div className="text-sm text-gray-600 bg-gray-100 p-2 rounded-md">
+                                            <span className="font-semibold">{t('maxAvailableValue')}</span> {formatCurrencyFr(maxInvoiceValue)} DH
+                                        </div>
+                                    ) : null}
+                                </div>
+                                {generationError && <p className="sm:col-span-2 text-sm text-red-600 p-2 bg-red-50 rounded-md">{generationError}</p>}
+                            </fieldset>
+                            <div className="p-4 flex justify-end space-x-3 bg-gray-50">
+                                <button type="button" onClick={() => setGeneratingModalOpen(false)} className="px-4 py-2 text-sm bg-white border rounded-md">{t('cancel')}</button>
+                                <button type="submit" disabled={isGenerating || isCheckingValue} className="px-4 py-2 w-28 flex justify-center text-sm text-white bg-indigo-600 rounded-md disabled:bg-indigo-400">{isGenerating ? <Spinner /> : t('generate')}</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+            
+            {viewingInvoice && (
+                <div className="fixed inset-0 bg-black bg-opacity-70 z-40 flex justify-center items-center p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                        <div className="p-4 border-b flex justify-between items-center no-print">
+                            <h2 className="text-xl font-bold">{t('invoice')} #{viewingInvoice.invoiceNumber}</h2>
+                            <div className="flex items-center gap-2">
+                                <button onClick={handleDownloadWord} disabled={isExporting} className="px-4 py-2 text-sm text-white bg-blue-600 rounded-md inline-flex items-center hover:bg-blue-700 transition-colors disabled:bg-blue-400">
+                                    {isExporting ? <Spinner /> : <><WordIcon /> {t('downloadWord')}</>}
+                                </button>
+                                <button onClick={handleDownloadPdf} disabled={isExporting} className="px-4 py-2 text-sm text-white bg-red-600 rounded-md inline-flex items-center hover:bg-red-700 transition-colors disabled:bg-red-400">
+                                    {isExporting ? <Spinner /> : <><PdfIcon /> {t('downloadPdf')}</>}
+                                </button>
+                                <button onClick={handlePrint} disabled={isExporting} className="px-4 py-2 text-sm text-white bg-indigo-600 rounded-md inline-flex items-center hover:bg-indigo-700 transition-colors">
+                                    <PrintIcon />
+                                    {t('print')}
+                                </button>
+                                <button onClick={() => setViewingInvoice(null)} className="px-4 py-2 text-sm bg-gray-200 rounded-md hover:bg-gray-300 transition-colors">
+                                    {t('close')}
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-6 overflow-y-auto" ref={printRef}>
+                            <style>{`
+                                .invoice-box { font-family: Arial, sans-serif; font-size: 10pt; color: #000; }
+                                .invoice-box table { width: 100%; border-collapse: collapse; }
+                                .invoice-box th, .invoice-box td { border: 1px solid #000; padding: 4px; }
+                                .invoice-box .header-table td { border: none; }
+                                .invoice-box .items-table { min-height: 400px; }
+                                .invoice-box .items-table th { background-color: #e0e0e0; font-weight: bold; }
+                                .invoice-box .totals-box { border-radius: 5px; }
+                                .invoice-box .totals-box td { border: 1px solid #000; padding: 5px; }
+                                .invoice-box .no-border { border: none; }
+                                .invoice-box .text-right { text-align: right; }
+                                .invoice-box .font-bold { font-weight: bold; }
+                            `}</style>
+                            <div className="invoice-box">
+                                <header className="text-center mb-8">
+                                    <h1 className="text-2xl font-bold uppercase">{profile?.companyName}</h1>
+                                </header>
+
+                                <table className="header-table mb-5">
+                                    <tbody>
+                                    <tr>
+                                        <td className="w-1/2 align-top">
+                                            <div className="border border-black p-2">
+                                                <strong>{t('factureDeVente')}</strong> {viewingInvoice.invoiceNumber}
+                                            </div>
+                                        </td>
+                                        <td className="w-1/2 align-top pl-5">
+                                            <div className="border border-black p-2">
+                                                <p className="font-bold m-0 mb-1">{viewingInvoice.customerName}</p>
+                                            </div>
+                                            <p className="text-right mt-1">{viewingInvoice.invoiceDate}</p>
+                                        </td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+
+                                <table className="items-table">
+                                    <thead>
+                                        <tr>
+                                            <th>{t('designation')}</th>
+                                            <th>{t('puHT')}</th>
+                                            <th>{t('quantity')}</th>
+                                            <th>{t('montantHT')}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {viewingInvoice.items.map((item, i) => (
+                                            <tr key={i}>
+                                                <td>{item.description}</td>
+                                                <td>{formatCurrencyFr(item.unitPrice)} DH</td>
+                                                <td>{item.quantity}</td>
+                                                <td>{formatCurrencyFr(item.total)} DH</td>
+                                            </tr>
+                                        ))}
+                                        {/* Fill empty rows to ensure consistent table height */}
+                                        {Array.from({ length: Math.max(0, 15 - viewingInvoice.items.length) }).map((_, i) => (
+                                            <tr key={`empty-${i}`}>
+                                                <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+
+                                <table className="mt-4">
+                                  <tbody>
+                                    <tr>
+                                        <td className="w-3/5 align-bottom no-border">
+                                            <div className="mb-3">{t('espece')}</div>
+                                            <div className="mb-4">
+                                                <span><strong>{t('avance')}</strong> {formatCurrencyFr(viewingInvoice.totalAmount)} DH</span><br/>
+                                                <span><strong>{t('rest')}</strong> 0,00 DH</span><br/>
+                                                <span><strong>{t('creditClient')}</strong> 0,00 DH</span>
+                                            </div>
+                                            <div className="text-xs">
+                                                <p className="font-bold m-0">{t('invoiceSumInWordsPrefix')}</p>
+                                                <p className="m-0">{numberToWordsFr(viewingInvoice.totalAmount)}</p>
+                                            </div>
+                                        </td>
+                                        <td className="w-2/5 align-top no-border">
+                                            <table className="totals-box">
+                                                <tbody>
+                                                <tr><td>{t('totalHTBox')}</td><td className="text-right">{formatCurrencyFr(viewingInvoice.totalAmount / (1 + VAT_RATE))} DH</td></tr>
+                                                <tr><td>{t('remise')}</td><td className="text-right">{formatCurrencyFr(0)} DH</td></tr>
+                                                <tr><td>{t('mtva')}</td><td className="text-right">{formatCurrencyFr(viewingInvoice.totalAmount - (viewingInvoice.totalAmount / (1 + VAT_RATE)))} DH</td></tr>
+                                                <tr><td className="font-bold">{t('totalTTCBox')}</td><td className="text-right font-bold">{formatCurrencyFr(viewingInvoice.totalAmount)} DH</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                                <footer className="mt-5">
+                                    <strong>Adresse:</strong> {profile?.companyAddress}
+                                </footer>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* Danger Zone */}
+            <div className="bg-red-50 p-4 rounded-lg shadow-md mt-6 border border-red-300">
+                <h2 className="text-xl font-semibold mb-4 text-red-800">{t('dangerZone')}</h2>
+                <div>
+                    <p className="text-md font-semibold text-gray-700 mb-2">{t('clearInvoicesTitle')}</p>
+                    <p className="text-xs text-red-700 mb-3">{t('clearInvoicesDescription')}</p>
+                    <button 
+                        onClick={handleClearInvoices}
+                        className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-all shadow-sm hover:shadow-md disabled:bg-red-400 disabled:cursor-not-allowed" 
+                        disabled={!dbInitialized || invoices.length === 0}
+                    >
+                        {t('clearInvoicesButton')}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default InvoicePage;
