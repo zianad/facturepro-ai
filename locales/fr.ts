@@ -58,9 +58,6 @@ export const fr = {
   print: "Imprimer",
   noInvoicesFound: "Aucune facture trouvée.",
   confirmDeleteInvoiceAndRestock: "Êtes-vous sûr de vouloir supprimer cette facture ? Les articles seront retournés à l'inventaire.",
-  invoiceReference: "Référence",
-  invoicePU: "P.U",
-  invoiceTotalHT: "Total HT",
   subtotalHT: "Montant Total HT",
   vat20: "Total TVA (20%)",
   totalTTC: "Montant Total TTC",
@@ -107,8 +104,6 @@ export const fr = {
   downloadWord: "Télécharger Word",
   inventoryValueExceededError: "La valeur de la facture demandée ({requested} DH) dépasse la valeur totale du stock disponible à cette date ({available} DH).",
   maxAvailableValue: "Valeur maximale disponible à cette date:",
-  
-  // New keys for the redesigned invoice
   factureDeVente: "Facture de Vente N:",
   designation: "Designation",
   puHT: "PU H.T",

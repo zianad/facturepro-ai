@@ -60,9 +60,6 @@ export const ar: typeof fr = {
   print: "طباعة",
   noInvoicesFound: "لم يتم العثور على فواتير.",
   confirmDeleteInvoiceAndRestock: "هل أنت متأكد أنك تريد حذف هذه الفاتورة؟ سيتم إعادة المنتجات إلى المخزون.",
-  invoiceReference: "المرجع",
-  invoicePU: "س.و",
-  invoiceTotalHT: "المجموع د.إ.ر",
   subtotalHT: "المبلغ الإجمالي د.إ.ر",
   vat20: "ضريبة القيمة المضافة (20%)",
   totalTTC: "المبلغ الإجمالي ش.ض",
@@ -109,8 +106,6 @@ export const ar: typeof fr = {
   downloadWord: "تحميل Word",
   inventoryValueExceededError: "قيمة الفاتورة المطلوبة ({requested} د.م.) تتجاوز القيمة الإجمالية للمخزون المتاح في هذا التاريخ ({available} د.م.).",
   maxAvailableValue: "القيمة القصوى المتاحة في هذا التاريخ:",
-  
-  // New keys for the redesigned invoice
   factureDeVente: "فاتورة بيع رقم:",
   designation: "البيان",
   puHT: "السعر الوحدوي د.إ",
