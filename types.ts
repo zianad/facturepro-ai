@@ -27,8 +27,6 @@ export interface GeneratedInvoice {
   id: number;
   invoiceNumber: string;
   customerName: string;
-  customerICE?: string;
-  customerRC?: string;
   invoiceDate: string; // YYYY-MM-DD
   totalAmount: number;
   items: InvoiceItem[];

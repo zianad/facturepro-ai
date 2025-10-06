@@ -115,7 +115,6 @@ export const ar: typeof fr = {
   designation: "البيان",
   puHT: "السعر الوحدوي د.إ",
   montantHT: "المبلغ د.إ",
-  unite: "الوحدة",
   remise: "الخصم",
   totalHTBox: "المجموع دون احتساب الرسوم",
   mtva: "ضريبة القيمة المضافة 20%",
