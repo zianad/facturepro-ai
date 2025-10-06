@@ -222,6 +222,52 @@ export const deleteInvoiceAndRestock = (invoiceId: number): Promise<void> => {
     });
 };
 
+export const clearAllInvoicesAndRestock = (): Promise<void> => {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([INVOICES_STORE_NAME, INVENTORY_STORE_NAME], 'readwrite');
+        const invoiceStore = transaction.objectStore(INVOICES_STORE_NAME);
+
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = (event) => reject((event.target as IDBTransaction).error || new Error("Transaction failed during clear invoices and restock."));
+
+        const getAllInvoicesRequest = invoiceStore.getAll();
+
+        getAllInvoicesRequest.onsuccess = async () => {
+            const allInvoices: GeneratedInvoice[] = getAllInvoicesRequest.result;
+            if (allInvoices.length === 0) {
+                return; // Nothing to do, transaction will complete successfully.
+            }
+
+            try {
+                const allItemsToRestock: InvoiceItem[] = allInvoices.flatMap(inv => inv.items);
+                
+                const aggregatedItems = new Map<string, InvoiceItem>();
+                for (const item of allItemsToRestock) {
+                    const key = `${item.reference}::${item.description}`;
+                    const existing = aggregatedItems.get(key);
+                    if (existing) {
+                        existing.quantity += item.quantity;
+                    } else {
+                        aggregatedItems.set(key, { ...item });
+                    }
+                }
+
+                await restockStockFromInvoice(transaction, Array.from(aggregatedItems.values()));
+                invoiceStore.clear();
+
+            } catch (error) {
+                console.error("Failed during the restock process of clearing all invoices:", error);
+                transaction.abort();
+                reject(error);
+            }
+        };
+
+        getAllInvoicesRequest.onerror = () => {
+            reject(getAllInvoicesRequest.error);
+        };
+    });
+};
+
 export const getAvailableInventoryValue = (date: string): Promise<number> => {
     return new Promise((resolve, reject) => {
         const VAT_RATE = 0.20;
