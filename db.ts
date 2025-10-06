@@ -1,7 +1,7 @@
 import { GeneratedInvoice, InventoryItem, ProfileData, InvoiceItem } from './types';
 
 const DB_NAME = 'FactureProDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Incremented version to trigger upgrade
 const INVENTORY_STORE_NAME = 'inventory';
 const INVOICES_STORE_NAME = 'invoices';
 const PROFILE_STORE_NAME = 'profile';
@@ -17,15 +17,29 @@ export const initDB = (): Promise<boolean> => {
 
         request.onupgradeneeded = (event) => {
             const dbInstance = (event.target as IDBOpenDBRequest).result;
-            if (!dbInstance.objectStoreNames.contains(INVENTORY_STORE_NAME)) {
-                const inventoryStore = dbInstance.createObjectStore(INVENTORY_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            const transaction = (event.target as IDBOpenDBRequest).transaction;
+            
+            // --- Upgrade Inventory Store (more robustly) ---
+            let inventoryStore: IDBObjectStore;
+            if (dbInstance.objectStoreNames.contains(INVENTORY_STORE_NAME)) {
+                inventoryStore = transaction!.objectStore(INVENTORY_STORE_NAME);
+            } else {
+                inventoryStore = dbInstance.createObjectStore(INVENTORY_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            }
+            // Ensure all necessary indexes exist on the inventory store
+            if (!inventoryStore.indexNames.contains('reference')) {
                 inventoryStore.createIndex('reference', 'reference', { unique: false });
-                // Add a compound index for efficient lookup
+            }
+            if (!inventoryStore.indexNames.contains('ref_name')) {
                 inventoryStore.createIndex('ref_name', ['reference', 'name'], { unique: false });
             }
+
+            // --- Upgrade Invoices Store ---
             if (!dbInstance.objectStoreNames.contains(INVOICES_STORE_NAME)) {
                 dbInstance.createObjectStore(INVOICES_STORE_NAME, { keyPath: 'id', autoIncrement: true });
             }
+
+            // --- Upgrade Profile Store ---
             if (!dbInstance.objectStoreNames.contains(PROFILE_STORE_NAME)) {
                 dbInstance.createObjectStore(PROFILE_STORE_NAME, { keyPath: 'id' });
             }
