@@ -348,6 +348,8 @@ export const createInvoiceFromTotal = (
     invoiceData: {
         invoiceNumber: string;
         customerName: string;
+        customerICE?: string;
+        customerRC?: string;
         invoiceDate: string;
         totalAmount: number; // This is the target TTC
     }
@@ -466,7 +468,11 @@ export const createInvoiceFromTotal = (
 
                 // Step 3: Create the final invoice with the adjusted values
                 const newInvoice: Omit<GeneratedInvoice, 'id'> = {
-                    ...invoiceData,
+                    invoiceNumber: invoiceData.invoiceNumber,
+                    customerName: invoiceData.customerName,
+                    customerICE: invoiceData.customerICE,
+                    customerRC: invoiceData.customerRC,
+                    invoiceDate: invoiceData.invoiceDate,
                     totalAmount: targetTotalTTC, // Use the user's requested total
                     items: finalInvoiceItems // Use the potentially adjusted items
                 };
