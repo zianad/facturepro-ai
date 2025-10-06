@@ -281,7 +281,7 @@ export const createInvoiceFromTotal = (
                 const roundedTargetTTC = Math.round(invoiceData.totalAmount * 100);
                 const roundedAvailableTTC = Math.round(totalAvailableValueTTC * 100);
 
-                if (Math.abs(roundedTargetTTC - roundedAvailableTTC) <= 1) {
+                if (Math.abs(roundedTargetTTC - roundedAvailableTTC) <= 1) { // Use a small tolerance for floating point issues
                     itemsToSell = availableInventory.map(item => ({
                         stockItem: item,
                         quantityToTake: item.quantity
@@ -294,11 +294,12 @@ export const createInvoiceFromTotal = (
                     const targetTotalHT = invoiceData.totalAmount / (1 + VAT_RATE);
                     let currentTotalHT = 0;
                     
+                    // Prioritize more expensive items to reach the total faster with fewer items
                     availableInventory.sort((a, b) => b.price - a.price);
 
                     for (const stockItem of availableInventory) {
                         const remainingValueNeeded = targetTotalHT - currentTotalHT;
-                        if (remainingValueNeeded <= 0.001) break;
+                        if (remainingValueNeeded <= 0.001) break; // Stop if we're close enough
 
                         if(stockItem.price <= 0) continue;
 
@@ -319,9 +320,11 @@ export const createInvoiceFromTotal = (
                 const invoiceItemsMap = new Map<string, InvoiceItem>();
                 let finalActualTotalHT = 0;
 
+                // Step 1: Deduct real stock and calculate actual totals
                 for (const { stockItem, quantityToTake } of itemsToSell) {
+                    // Deduct from inventory using real values
                     const updatedItem = { ...stockItem, quantity: stockItem.quantity - quantityToTake };
-                    inventoryStore.put(updatedItem);
+                    inventoryStore.put(updatedItem); // This operation uses the real price
 
                     const itemValue = quantityToTake * stockItem.price;
                     finalActualTotalHT += itemValue;
@@ -344,11 +347,28 @@ export const createInvoiceFromTotal = (
                 
                 const finalInvoiceItems = Array.from(invoiceItemsMap.values());
                 const finalActualTotalTTC = finalActualTotalHT * (1 + VAT_RATE);
+                const targetTotalTTC = invoiceData.totalAmount;
 
+                // Step 2: Adjust invoice item prices to match the requested total
+                const differenceTTC = targetTotalTTC - finalActualTotalTTC;
+                
+                if (finalInvoiceItems.length > 0 && Math.abs(differenceTTC) > 0.001) {
+                    // Find the item with the highest total value to absorb the difference
+                    let itemToAdjust = finalInvoiceItems.reduce((prev, current) => (prev.total > current.total) ? prev : current);
+                    
+                    // The difference needs to be applied to the HT value of the item
+                    const differenceHT = differenceTTC / (1 + VAT_RATE);
+
+                    // Adjust the total and unit price of that single item for the invoice document
+                    itemToAdjust.total += differenceHT;
+                    itemToAdjust.unitPrice = itemToAdjust.total / itemToAdjust.quantity;
+                }
+
+                // Step 3: Create the final invoice with the adjusted values
                 const newInvoice: Omit<GeneratedInvoice, 'id'> = {
                     ...invoiceData,
-                    totalAmount: finalActualTotalTTC,
-                    items: finalInvoiceItems
+                    totalAmount: targetTotalTTC, // Use the user's requested total
+                    items: finalInvoiceItems // Use the potentially adjusted items
                 };
 
                 invoiceStore.add(newInvoice);
