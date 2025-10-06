@@ -2,8 +2,6 @@ export interface ProfileData {
   id: number; // Static key, e.g., 1
   userName: string;
   companyName: string;
-  companyICE: string;
-  companyRC: string;
   companyAddress: string;
   companyPhone: string;
 }
