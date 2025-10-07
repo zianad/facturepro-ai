@@ -65,7 +65,6 @@ export const fr = {
   footerDisclaimer: "Les produits importés ne sont ni repris ni échanges",
   companyAddressTitle: "Siège social",
   companyInfo: "5, rue DIXMUDE, 1er Etage, Appt 2, BENJDIA - Casablanca",
-  companyLegal: "I.F : 53840915 - T.P : 34265337 - R.C : 588.323 - I.C.E : 003321603 0000 09",
   companyHeader: "IDAR COSMETICS SARL AU",
   companySubHeader: "Société à responsabilité limitée d'associé unique au Capital social de 100.000,00 dirhams",
   loading: "Chargement...",

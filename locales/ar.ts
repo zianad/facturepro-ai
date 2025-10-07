@@ -67,7 +67,6 @@ export const ar: typeof fr = {
   footerDisclaimer: "المنتجات المستوردة لا ترد ولا تستبدل",
   companyAddressTitle: "المقر الرئيسي",
   companyInfo: "5، زنقة ديسمود، الطابق الأول، شقة 2، بنجدية - الدار البيضاء",
-  companyLegal: "I.F : 53840915 - T.P : 34265337 - R.C : 588.323 - I.C.E : 003321603 0000 09",
   companyHeader: "إيدار كوسميتيكس ش.م.م",
   companySubHeader: "شركة ذات مسؤولية محدودة بشريك وحيد برأس مال 100,000.00 درهم",
   loading: "تحميل...",
