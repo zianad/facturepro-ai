@@ -25,6 +25,30 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- html-to-docx will be loaded dynamically -->
+    <style>
+      @media print {
+        body * {
+          visibility: hidden;
+        }
+        #printable-invoice, #printable-invoice * {
+          visibility: visible;
+        }
+        #printable-invoice {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+        }
+        @page {
+          size: A4;
+          margin: 1.6cm;
+        }
+        body {
+         -webkit-print-color-adjust: exact !important; /* For Chrome, Safari */
+         print-color-adjust: exact !important; /* For Firefox */
+        }
+      }
+    </style>
   </head>
   <body class="bg-gray-50 text-gray-900">
     <div id="root"></div>

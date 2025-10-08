@@ -239,22 +239,7 @@ const InvoicePage: React.FC = () => {
     };
 
     const handlePrint = () => {
-        const printableContent = document.getElementById('printable-invoice');
-        if (printableContent) {
-            const printWindow = window.open('', '', 'height=800,width=800');
-            printWindow?.document.write('<html><head><title>Facture</title>');
-            printWindow?.document.write('<link href="https://cdn.tailwindcss.com" rel="stylesheet">');
-            printWindow?.document.write('<style>@page { size: A4; margin: 0; } body { margin: 1.6cm; }</style>');
-            printWindow?.document.write('</head><body>');
-            printWindow?.document.write(printableContent.innerHTML);
-            printWindow?.document.write('</body></html>');
-            printWindow?.document.close();
-            setTimeout(() => {
-                 printWindow?.focus();
-                 printWindow?.print();
-                 printWindow?.close();
-            }, 250);
-        }
+        window.print();
     };
 
     const handleDownloadPdf = () => {
@@ -435,7 +420,7 @@ const InvoicePage: React.FC = () => {
             {isViewModalOpen && selectedInvoice && (
                 <div className="fixed inset-0 bg-black bg-opacity-75 z-40 flex justify-center items-center p-4">
                     <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in-up">
-                        <div className="p-4 border-b flex justify-between items-center">
+                        <div className="p-4 border-b flex justify-between items-center no-print">
                             <h2 className="text-xl font-bold text-gray-900">{t('invoice')} N° {selectedInvoice.invoiceNumber}</h2>
                              <div className="flex items-center space-x-2">
                                 <button onClick={handlePrint} className="flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"><PrintIcon /> {t('print')}</button>
@@ -445,104 +430,77 @@ const InvoicePage: React.FC = () => {
                             </div>
                         </div>
                         <div className="p-6 overflow-y-auto">
-                           <div id="printable-invoice" className="p-8 bg-white text-black text-xs font-sans">
-                               <div className="grid grid-cols-2 items-start mb-8">
-                                   <div className="font-bold text-2xl">{profile?.companyName.toUpperCase()}</div>
-                                   <div className="border border-black p-2">
-                                       <div className="font-bold text-sm">{selectedInvoice.customerName}</div>
+                           <div id="printable-invoice" className="p-8 bg-white text-black text-sm font-serif">
+                               <header className="flex justify-between items-start mb-10">
+                                   <div>
+                                       <h1 className="font-bold text-3xl mb-2 text-gray-800">{profile?.companyName.toUpperCase()}</h1>
+                                       <p className="text-gray-600">{profile?.companyAddress}</p>
+                                       <p className="text-gray-600">{profile?.companyPhone}</p>
                                    </div>
-                               </div>
-
-                               <div className="grid grid-cols-2 items-start mb-4">
-                                   <div></div>
-                                   <div className="text-right text-sm">{selectedInvoice.invoiceDate}</div>
-                               </div>
-
-                               <div className="grid grid-cols-2 items-start mb-8">
-                                   <div className="border border-black p-2 w-1/2">
-                                       <span className="font-bold">{t('factureDeVente')}</span> {selectedInvoice.invoiceNumber}
+                                   <div className="text-right">
+                                       <h2 className="text-2xl font-bold uppercase text-gray-700">{t('invoice')}</h2>
+                                       <p className="mt-1"><span className="font-bold text-gray-600">N°:</span> {selectedInvoice.invoiceNumber}</p>
+                                       <p><span className="font-bold text-gray-600">{t('invoiceDate')}:</span> {selectedInvoice.invoiceDate}</p>
                                    </div>
-                               </div>
+                               </header>
 
-                               <table className="w-full border-collapse border border-black mb-8">
-                                   <thead>
-                                       <tr className="bg-gray-200">
-                                           <th className="border border-black p-1 text-center font-bold">{t('designation')}</th>
-                                           <th className="border border-black p-1 text-center font-bold w-24">{t('puHT')}</th>
-                                           <th className="border border-black p-1 text-center font-bold w-16">{t('quantityLabel')}</th>
-                                           <th className="border border-black p-1 text-center font-bold w-24">{t('montantHT')}</th>
-                                       </tr>
-                                   </thead>
-                                   <tbody>
-                                      {selectedInvoice.items.map((item, index) => (
-                                          <tr key={index}>
-                                               <td className="border-l border-r border-black p-1">{item.description}</td>
-                                               <td className="border-l border-r border-black p-1 text-right">{formatCurrencyFr(item.unitPrice)} DH</td>
-                                               <td className="border-l border-r border-black p-1 text-center">{item.quantity}</td>
-                                               <td className="border-l border-r border-black p-1 text-right">{formatCurrencyFr(item.total)} DH</td>
-                                          </tr>
-                                      ))}
-                                      {Array.from({ length: Math.max(0, 15 - selectedInvoice.items.length) }).map((_, index) => (
-                                          <tr key={`empty-${index}`}>
-                                              <td className="border-l border-r border-black p-1 h-6">&nbsp;</td>
-                                              <td className="border-l border-r border-black p-1"></td>
-                                              <td className="border-l border-r border-black p-1"></td>
-                                              <td className="border-l border-r border-black p-1"></td>
-                                          </tr>
-                                      ))}
-                                   </tbody>
-                               </table>
+                               <section className="mb-10">
+                                   <div className="border border-gray-300 p-4 rounded-md bg-gray-50 w-full sm:w-1/2">
+                                       <h3 className="font-semibold text-gray-800 mb-2">{t('billTo')}:</h3>
+                                       <p className="font-bold text-lg text-gray-900">{selectedInvoice.customerName}</p>
+                                   </div>
+                               </section>
+
+                               <section>
+                                   <table className="w-full mb-8 border-collapse">
+                                       <thead>
+                                           <tr className="bg-gray-800 text-white">
+                                               <th className="p-3 text-left font-bold w-1/2">{t('designation')}</th>
+                                               <th className="p-3 text-right font-bold">{t('puHT')}</th>
+                                               <th className="p-3 text-center font-bold">{t('quantityLabel')}</th>
+                                               <th className="p-3 text-right font-bold">{t('montantHT')}</th>
+                                           </tr>
+                                       </thead>
+                                       <tbody>
+                                          {selectedInvoice.items.map((item, index) => (
+                                              <tr key={index} className="border-b border-gray-200">
+                                                   <td className="p-3 align-top">{item.description}</td>
+                                                   <td className="p-3 text-right align-top">{formatCurrencyFr(item.unitPrice)} DH</td>
+                                                   <td className="p-3 text-center align-top">{item.quantity}</td>
+                                                   <td className="p-3 text-right align-top">{formatCurrencyFr(item.total)} DH</td>
+                                              </tr>
+                                          ))}
+                                       </tbody>
+                                   </table>
+                               </section>
                                
-                                <div className="flex justify-end mb-8">
-                                    <div className="w-1/2">
-                                        <div className="grid grid-cols-2 border border-black">
-                                            <div className="p-1 font-bold border-r border-black">{t('totalHTBox')}</div>
-                                            <div className="p-1 text-right">{formatCurrencyFr(selectedInvoice.totalAmount / 1.2)} DH</div>
+                               <div className="flex-grow" style={{ minHeight: `${Math.max(0, 12 - selectedInvoice.items.length) * 30}px` }}></div>
+
+                               <section className="flex justify-end mb-8">
+                                    <div className="w-full max-w-sm text-gray-700">
+                                        <div className="flex justify-between border-b border-gray-300 py-2">
+                                            <span className="font-semibold">{t('totalHTBox')}</span>
+                                            <span>{formatCurrencyFr(selectedInvoice.totalAmount / 1.2)} DH</span>
                                         </div>
-                                        <div className="grid grid-cols-2 border-l border-r border-b border-black">
-                                            <div className="p-1 font-bold border-r border-black">{t('remise')}</div>
-                                            <div className="p-1 text-right">0,00 DH</div>
+                                         <div className="flex justify-between border-b border-gray-300 py-2">
+                                            <span className="font-semibold">{t('mtva')}</span>
+                                            <span>{formatCurrencyFr(selectedInvoice.totalAmount - (selectedInvoice.totalAmount / 1.2))} DH</span>
                                         </div>
-                                         <div className="grid grid-cols-2 border-l border-r border-b border-black">
-                                            <div className="p-1 font-bold border-r border-black">{t('mtva')}</div>
-                                            <div className="p-1 text-right">{formatCurrencyFr(selectedInvoice.totalAmount - (selectedInvoice.totalAmount / 1.2))} DH</div>
-                                        </div>
-                                         <div className="grid grid-cols-2 border-l border-r border-b border-black bg-gray-200">
-                                            <div className="p-1 font-bold border-r border-black">{t('totalTTCBox')}</div>
-                                            <div className="p-1 text-right font-bold">{formatCurrencyFr(selectedInvoice.totalAmount)} DH</div>
+                                         <div className="flex justify-between font-bold text-lg bg-gray-100 p-3 mt-2 rounded-md">
+                                            <span>{t('totalTTCBox')}</span>
+                                            <span>{formatCurrencyFr(selectedInvoice.totalAmount)} DH</span>
                                         </div>
                                     </div>
-                               </div>
+                               </section>
 
-                                <div className="grid grid-cols-2">
-                                    <div>
-                                        <div className="grid grid-cols-3">
-                                            <div></div>
-                                            <div className="font-bold">{t('espece')}</div>
-                                            <div></div>
-                                        </div>
-                                        <div className="grid grid-cols-2 mt-4">
-                                            <div className="font-bold">{t('avance')}</div>
-                                            <div>{formatCurrencyFr(selectedInvoice.totalAmount)} DH</div>
-                                        </div>
-                                        <div className="grid grid-cols-2">
-                                            <div className="font-bold">{t('rest')}</div>
-                                            <div>0,00 DH</div>
-                                        </div>
-                                         <div className="grid grid-cols-2">
-                                            <div className="font-bold">{t('creditClient')}</div>
-                                            <div>0,00 DH</div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="mt-4">
-                                   <p><span className="font-bold">{t('invoiceSumInWordsPrefix')}</span> {numberToWordsFr(selectedInvoice.totalAmount)}</p>
-                                </div>
-                                
-                                <div className="mt-8">
-                                   <p><span className="font-bold">{t('companyAddressTitle')}:</span> {profile?.companyAddress}</p>
-                                </div>
-
+                               <section className="mb-8 p-4 bg-gray-50 rounded-md">
+                                  <p className="font-semibold"><span className="font-bold">{t('invoiceSumInWordsPrefix')}</span> {numberToWordsFr(selectedInvoice.totalAmount)}</p>
+                               </section>
+                               
+                               <footer className="mt-12 text-center text-xs text-gray-500 border-t pt-4">
+                                  <p><span className="font-bold">{t('companyName')}:</span> {profile?.companyName}</p>
+                                  <p><span className="font-bold">{t('companyAddressTitle')}:</span> {profile?.companyAddress}</p>
+                               </footer>
                            </div>
                         </div>
                     </div>
