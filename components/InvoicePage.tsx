@@ -100,6 +100,7 @@ const numberToWordsFr = (num: number): string => {
     return words.replace(/\s+/g, ' ').toUpperCase().trim();
 };
 
+const numberStyle = { fontFamily: 'Arial, sans-serif' };
 
 const InvoicePage: React.FC = () => {
     const { t } = useLanguage();
@@ -446,8 +447,8 @@ const InvoicePage: React.FC = () => {
                                    </div>
                                    <div className="text-right">
                                        <h2 className="text-2xl font-bold uppercase text-gray-700">{t('invoice')}</h2>
-                                       <p className="mt-1"><span className="font-bold text-gray-600">N°:</span> {selectedInvoice.invoiceNumber}</p>
-                                       <p><span className="font-bold text-gray-600">{t('invoiceDate')}:</span> {selectedInvoice.invoiceDate}</p>
+                                       <p className="mt-1"><span className="font-bold text-gray-600">N°:</span> <span style={numberStyle}>{selectedInvoice.invoiceNumber}</span></p>
+                                       <p><span className="font-bold text-gray-600">{t('invoiceDate')}:</span> <span style={numberStyle}>{selectedInvoice.invoiceDate}</span></p>
                                    </div>
                                </header>
 
@@ -472,9 +473,9 @@ const InvoicePage: React.FC = () => {
                                           {selectedInvoice.items.map((item, index) => (
                                               <tr key={index} className="border-b border-gray-200">
                                                    <td className="p-3 align-top">{item.description}</td>
-                                                   <td className="p-3 text-right align-top">{formatCurrencyFr(item.unitPrice)} DH</td>
-                                                   <td className="p-3 text-center align-top">{item.quantity}</td>
-                                                   <td className="p-3 text-right align-top">{formatCurrencyFr(item.total)} DH</td>
+                                                   <td style={numberStyle} className="p-3 text-right align-top">{formatCurrencyFr(item.unitPrice)} DH</td>
+                                                   <td style={numberStyle} className="p-3 text-center align-top">{item.quantity}</td>
+                                                   <td style={numberStyle} className="p-3 text-right align-top">{formatCurrencyFr(item.total)} DH</td>
                                               </tr>
                                           ))}
                                        </tbody>
@@ -485,15 +486,15 @@ const InvoicePage: React.FC = () => {
                                     <div className="w-full max-w-sm text-gray-700">
                                         <div className="flex justify-between border-b border-gray-300 py-2">
                                             <span className="font-semibold">{t('totalHTBox')}</span>
-                                            <span>{formatCurrencyFr(selectedInvoice.totalAmount / 1.2)} DH</span>
+                                            <span style={numberStyle}>{formatCurrencyFr(selectedInvoice.totalAmount / 1.2)} DH</span>
                                         </div>
                                          <div className="flex justify-between border-b border-gray-300 py-2">
                                             <span className="font-semibold">{t('mtva')}</span>
-                                            <span>{formatCurrencyFr(selectedInvoice.totalAmount - (selectedInvoice.totalAmount / 1.2))} DH</span>
+                                            <span style={numberStyle}>{formatCurrencyFr(selectedInvoice.totalAmount - (selectedInvoice.totalAmount / 1.2))} DH</span>
                                         </div>
                                          <div className="flex justify-between font-bold text-lg bg-gray-100 p-3 mt-2 rounded-md">
                                             <span>{t('totalTTCBox')}</span>
-                                            <span>{formatCurrencyFr(selectedInvoice.totalAmount)} DH</span>
+                                            <span style={numberStyle}>{formatCurrencyFr(selectedInvoice.totalAmount)} DH</span>
                                         </div>
                                     </div>
                                </section>
