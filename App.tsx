@@ -15,7 +15,6 @@ const PageLoader: React.FC = () => (
   </div>
 );
 
-
 const AppContent: React.FC = () => {
   return (
     <HashRouter>
@@ -32,6 +31,9 @@ const AppContent: React.FC = () => {
             </Routes>
           </React.Suspense>
         </main>
+        <footer className="text-center text-xs text-gray-400 p-2 border-t bg-gray-50">
+          Version 2.1.0
+        </footer>
       </div>
     </HashRouter>
   );
