@@ -27,6 +27,29 @@
     <!-- html-to-docx will be loaded dynamically -->
     <style>
       @media print {
+        /* Hide elements not meant for printing */
+        .no-print {
+          display: none !important;
+        }
+
+        /* Reset the modal container to un-constrain it */
+        .print-modal-container {
+          position: static !important;
+          box-shadow: none !important;
+          border: none !important;
+          width: 100% !important;
+          max-width: none !important;
+          max-height: none !important;
+          height: auto !important;
+        }
+        /* Allow scrollable content to flow naturally across pages */
+        .print-modal-content {
+          overflow: visible !important;
+          height: auto !important;
+          padding: 0 !important;
+        }
+        
+        /* The standard "isolate the element" technique */
         body * {
           visibility: hidden;
         }
@@ -38,7 +61,9 @@
           left: 0;
           top: 0;
           width: 100%;
+          padding: 0 !important; /* Remove screen padding for print */
         }
+
         @page {
           size: A4;
           margin: 1.6cm;

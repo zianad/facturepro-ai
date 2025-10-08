@@ -419,7 +419,7 @@ const InvoicePage: React.FC = () => {
             {/* View Modal */}
             {isViewModalOpen && selectedInvoice && (
                 <div className="fixed inset-0 bg-black bg-opacity-75 z-40 flex justify-center items-center p-4">
-                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in-up">
+                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in-up print-modal-container">
                         <div className="p-4 border-b flex justify-between items-center no-print">
                             <h2 className="text-xl font-bold text-gray-900">{t('invoice')} N° {selectedInvoice.invoiceNumber}</h2>
                              <div className="flex items-center space-x-2">
@@ -429,7 +429,7 @@ const InvoicePage: React.FC = () => {
                                 <button onClick={() => setIsViewModalOpen(false)} className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 ml-4">{t('close')}</button>
                             </div>
                         </div>
-                        <div className="p-6 overflow-y-auto">
+                        <div className="p-6 overflow-y-auto print-modal-content">
                            <div id="printable-invoice" className="p-8 bg-white text-black text-sm font-serif">
                                <header className="flex justify-between items-start mb-10">
                                    <div>
@@ -474,8 +474,6 @@ const InvoicePage: React.FC = () => {
                                    </table>
                                </section>
                                
-                               <div className="flex-grow" style={{ minHeight: `${Math.max(0, 12 - selectedInvoice.items.length) * 30}px` }}></div>
-
                                <section className="flex justify-end mb-8">
                                     <div className="w-full max-w-sm text-gray-700">
                                         <div className="flex justify-between border-b border-gray-300 py-2">
