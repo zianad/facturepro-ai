@@ -434,7 +434,7 @@ const InvoicePage: React.FC = () => {
                                <header className="flex justify-between items-start mb-10">
                                    <div>
                                        <h1 className="font-bold text-3xl mb-2 text-gray-800">{profile?.companyName.toUpperCase()}</h1>
-                                       <p className="text-gray-600">{profile?.companyAddress}</p>
+                                       <p className="text-gray-600 whitespace-pre-wrap">{profile?.companyAddress}</p>
                                        <p className="text-gray-600">{profile?.companyPhone}</p>
                                    </div>
                                    <div className="text-right">
