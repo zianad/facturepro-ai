@@ -112,7 +112,7 @@ const InvoicePage: React.FC = () => {
     const [isViewModalOpen, setIsViewModalOpen] = React.useState(false);
     const [selectedInvoice, setSelectedInvoice] = React.useState<GeneratedInvoice | null>(null);
 
-    const [createFormData, setCreateFormData] = React.useState({ customerName: '', totalAmount: '', invoiceDate: new Date().toISOString().split('T')[0] });
+    const [createFormData, setCreateFormData] = React.useState({ customerName: '', invoiceNumber: '', totalAmount: '', invoiceDate: new Date().toISOString().split('T')[0] });
     const [isGenerating, setIsGenerating] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
 
@@ -177,7 +177,7 @@ const InvoicePage: React.FC = () => {
     const handleGenerateByTotal = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
-        if (!createFormData.customerName || !createFormData.totalAmount || !createFormData.invoiceDate) {
+        if (!createFormData.customerName || !createFormData.totalAmount || !createFormData.invoiceDate || !createFormData.invoiceNumber) {
             setError(t('invoiceCreationError'));
             return;
         }
@@ -195,12 +195,15 @@ const InvoicePage: React.FC = () => {
 
         setIsGenerating(true);
         try {
-            const maxId = invoices.length > 0 ? invoices[0].id : 0;
-            const invoiceNumber = (maxId + 1).toString();
-            await createInvoiceFromTotal({ ...createFormData, totalAmount, invoiceNumber });
+            await createInvoiceFromTotal({
+                customerName: createFormData.customerName,
+                invoiceDate: createFormData.invoiceDate,
+                invoiceNumber: createFormData.invoiceNumber,
+                totalAmount
+            });
             await loadData();
             setIsCreateModalOpen(false);
-            setCreateFormData({ customerName: '', totalAmount: '', invoiceDate: new Date().toISOString().split('T')[0] });
+            setCreateFormData({ customerName: '', invoiceNumber: '', totalAmount: '', invoiceDate: new Date().toISOString().split('T')[0] });
         } catch (err) {
             console.error("Invoice generation error:", err);
             setError(err instanceof Error ? err.message : String(t('generateByTotalError')));
@@ -398,6 +401,10 @@ const InvoicePage: React.FC = () => {
                                     <div>
                                         <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-1">{t('clientName')}</label>
                                         <input type="text" name="customerName" id="customerName" value={createFormData.customerName} onChange={handleCreateFormChange} className="w-full p-2 border border-gray-300 rounded-md" required />
+                                    </div>
+                                     <div>
+                                        <label htmlFor="invoiceNumber" className="block text-sm font-medium text-gray-700 mb-1">{t('invoiceNumber')}</label>
+                                        <input type="text" name="invoiceNumber" id="invoiceNumber" value={createFormData.invoiceNumber} onChange={handleCreateFormChange} className="w-full p-2 border border-gray-300 rounded-md" required />
                                     </div>
                                     <div>
                                         <label htmlFor="invoiceDate" className="block text-sm font-medium text-gray-700 mb-1">{t('invoiceDate')}</label>
