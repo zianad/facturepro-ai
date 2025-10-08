@@ -239,6 +239,15 @@ const InvoicePage: React.FC = () => {
     };
 
     const handlePrint = () => {
+        const originalTitle = document.title;
+        document.title = '';
+
+        const handleAfterPrint = () => {
+            document.title = originalTitle;
+            window.removeEventListener('afterprint', handleAfterPrint);
+        };
+        window.addEventListener('afterprint', handleAfterPrint);
+
         window.print();
     };
 
@@ -434,8 +443,6 @@ const InvoicePage: React.FC = () => {
                                <header className="flex justify-between items-start mb-10">
                                    <div>
                                        <h1 className="font-bold text-3xl mb-2 text-gray-800">{profile?.companyName.toUpperCase()}</h1>
-                                       <p className="text-gray-600 whitespace-pre-wrap">{profile?.companyAddress}</p>
-                                       <p className="text-gray-600">{profile?.companyPhone}</p>
                                    </div>
                                    <div className="text-right">
                                        <h2 className="text-2xl font-bold uppercase text-gray-700">{t('invoice')}</h2>
