@@ -195,7 +195,8 @@ const InvoicePage: React.FC = () => {
 
         setIsGenerating(true);
         try {
-            const invoiceNumber = String(Date.now()); // Using timestamp for more unique IDs
+            const maxId = invoices.length > 0 ? invoices[0].id : 0;
+            const invoiceNumber = (maxId + 1).toString();
             await createInvoiceFromTotal({ ...createFormData, totalAmount, invoiceNumber });
             await loadData();
             setIsCreateModalOpen(false);
