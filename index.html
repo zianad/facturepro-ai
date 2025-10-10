@@ -57,11 +57,25 @@
           visibility: visible;
         }
         #printable-invoice {
-          position: absolute;
-          left: 0;
-          top: 0;
+          position: static !important; /* CRITICAL CHANGE: Use static position for natural document flow */
+          left: auto;
+          top: auto;
           width: 100%;
-          padding: 0 !important; /* Remove screen padding for print */
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        
+        /* Improve table printing across pages */
+        table {
+          page-break-inside: auto; /* Allow tables to break across pages */
+        }
+
+        thead {
+          display: table-header-group; /* Ensures the table header repeats on each page */
+        }
+
+        tbody tr {
+          page-break-inside: avoid; /* Prevents a table row from splitting across two pages */
         }
 
         @page {
