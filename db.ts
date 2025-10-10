@@ -1,7 +1,7 @@
 import { GeneratedInvoice, InventoryItem, ProfileData, InvoiceItem } from './types';
 
 const DB_NAME = 'FactureProDB';
-const DB_VERSION = 2; // Incremented version to trigger upgrade
+const DB_VERSION = 3; // Incremented version to trigger upgrade
 const INVENTORY_STORE_NAME = 'inventory';
 const INVOICES_STORE_NAME = 'invoices';
 const PROFILE_STORE_NAME = 'profile';
@@ -32,6 +32,10 @@ export const initDB = (): Promise<boolean> => {
             }
             if (!inventoryStore.indexNames.contains('ref_name')) {
                 inventoryStore.createIndex('ref_name', ['reference', 'name'], { unique: false });
+            }
+            // PERFORMANCE: Add index for purchase date to speed up invoice generation
+            if (!inventoryStore.indexNames.contains('purchaseDate')) {
+                inventoryStore.createIndex('purchaseDate', 'purchaseDate', { unique: false });
             }
 
             // --- Upgrade Invoices Store ---
@@ -361,128 +365,139 @@ export const createInvoiceFromTotal = (
         transaction.oncomplete = () => resolve();
         transaction.onerror = (event) => reject((event.target as IDBTransaction).error || new Error("Transaction failed"));
         
-        const getAllRequest = inventoryStore.getAll();
-        
-        getAllRequest.onsuccess = async () => {
-            try {
-                const allInventory = getAllRequest.result as InventoryItem[];
-                const availableInventory = allInventory.filter(i =>
-                    i.quantity > 0 && new Date(i.purchaseDate) <= new Date(invoiceData.invoiceDate)
-                );
+        // OPTIMIZED: Use an index and cursor to fetch only relevant items instead of getAll()
+        const purchaseDateIndex = inventoryStore.index('purchaseDate');
+        const boundKeyRange = IDBKeyRange.upperBound(invoiceData.invoiceDate);
+        const availableInventory: InventoryItem[] = [];
 
-                if (availableInventory.length === 0) {
-                    throw new Error("لا توجد عناصر متاحة في المخزون في تاريخ الفاتورة المحدد أو قبله.");
+        const cursorRequest = purchaseDateIndex.openCursor(boundKeyRange);
+
+        cursorRequest.onerror = () => {
+            transaction.abort();
+        };
+
+        cursorRequest.onsuccess = () => {
+            const cursor = cursorRequest.result;
+            if (cursor) {
+                // Item is within date range, check quantity
+                if (cursor.value.quantity > 0) {
+                    availableInventory.push(cursor.value);
                 }
-
-                const totalAvailableValueHT = availableInventory.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-                const totalAvailableValueTTC = totalAvailableValueHT * (1 + VAT_RATE);
-
-                let itemsToSell: { stockItem: InventoryItem; quantityToTake: number }[] = [];
-                const roundedTargetTTC = Math.round(invoiceData.totalAmount * 100);
-                const roundedAvailableTTC = Math.round(totalAvailableValueTTC * 100);
-
-                if (Math.abs(roundedTargetTTC - roundedAvailableTTC) <= 1) { // Use a small tolerance for floating point issues
-                    itemsToSell = availableInventory.map(item => ({
-                        stockItem: item,
-                        quantityToTake: item.quantity
-                    }));
-                } else {
-                    if (invoiceData.totalAmount > totalAvailableValueTTC) {
-                         throw new Error(`قيمة الفاتورة المطلوبة (${invoiceData.totalAmount.toFixed(2)}) تتجاوز قيمة المخزون المتاح (${totalAvailableValueTTC.toFixed(2)}).`);
+                cursor.continue();
+            } else {
+                // Cursor is finished, all relevant items are collected.
+                // Now, execute the original invoice generation logic.
+                try {
+                    if (availableInventory.length === 0) {
+                        throw new Error("لا توجد عناصر متاحة في المخزون في تاريخ الفاتورة المحدد أو قبله.");
                     }
 
-                    const targetTotalHT = invoiceData.totalAmount / (1 + VAT_RATE);
-                    let currentTotalHT = 0;
-                    
-                    // Prioritize more expensive items to reach the total faster with fewer items
-                    availableInventory.sort((a, b) => b.price - a.price);
+                    const totalAvailableValueHT = availableInventory.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+                    const totalAvailableValueTTC = totalAvailableValueHT * (1 + VAT_RATE);
 
-                    for (const stockItem of availableInventory) {
-                        const remainingValueNeeded = targetTotalHT - currentTotalHT;
-                        if (remainingValueNeeded <= 0.001) break; // Stop if we're close enough
+                    let itemsToSell: { stockItem: InventoryItem; quantityToTake: number }[] = [];
+                    const roundedTargetTTC = Math.round(invoiceData.totalAmount * 100);
+                    const roundedAvailableTTC = Math.round(totalAvailableValueTTC * 100);
 
-                        if(stockItem.price <= 0) continue;
+                    if (Math.abs(roundedTargetTTC - roundedAvailableTTC) <= 1) { // Use a small tolerance for floating point issues
+                        itemsToSell = availableInventory.map(item => ({
+                            stockItem: item,
+                            quantityToTake: item.quantity
+                        }));
+                    } else {
+                        if (invoiceData.totalAmount > totalAvailableValueTTC) {
+                             throw new Error(`قيمة الفاتورة المطلوبة (${invoiceData.totalAmount.toFixed(2)}) تتجاوز قيمة المخزون المتاح (${totalAvailableValueTTC.toFixed(2)}).`);
+                        }
 
-                        const maxQtyFromValue = Math.floor(remainingValueNeeded / stockItem.price);
-                        const qtyToTake = Math.min(stockItem.quantity, maxQtyFromValue);
+                        const targetTotalHT = invoiceData.totalAmount / (1 + VAT_RATE);
+                        let currentTotalHT = 0;
+                        
+                        // Prioritize more expensive items to reach the total faster with fewer items
+                        availableInventory.sort((a, b) => b.price - a.price);
 
-                        if (qtyToTake > 0) {
-                            itemsToSell.push({ stockItem: stockItem, quantityToTake: qtyToTake });
-                            currentTotalHT += qtyToTake * stockItem.price;
+                        for (const stockItem of availableInventory) {
+                            const remainingValueNeeded = targetTotalHT - currentTotalHT;
+                            if (remainingValueNeeded <= 0.001) break; // Stop if we're close enough
+
+                            if(stockItem.price <= 0) continue;
+
+                            const maxQtyFromValue = Math.floor(remainingValueNeeded / stockItem.price);
+                            const qtyToTake = Math.min(stockItem.quantity, maxQtyFromValue);
+
+                            if (qtyToTake > 0) {
+                                itemsToSell.push({ stockItem: stockItem, quantityToTake: qtyToTake });
+                                currentTotalHT += qtyToTake * stockItem.price;
+                            }
                         }
                     }
-                }
 
-                if (itemsToSell.length === 0) {
-                    throw new Error("تعذر إنشاء الفاتورة للمبلغ الإجمالي المحدد. قد يكون المبلغ صغيرًا جدًا بالنسبة للمخزون الحالي.");
-                }
-
-                const invoiceItemsMap = new Map<string, InvoiceItem>();
-                let finalActualTotalHT = 0;
-
-                // Step 1: Deduct real stock and calculate actual totals
-                for (const { stockItem, quantityToTake } of itemsToSell) {
-                    // Deduct from inventory using real values
-                    const updatedItem = { ...stockItem, quantity: stockItem.quantity - quantityToTake };
-                    inventoryStore.put(updatedItem); // This operation uses the real price
-
-                    const itemValue = quantityToTake * stockItem.price;
-                    finalActualTotalHT += itemValue;
-                    
-                    const key = `${stockItem.reference}::${stockItem.name}::${stockItem.price}`;
-                    const existing = invoiceItemsMap.get(key);
-                    if (existing) {
-                        existing.quantity += quantityToTake;
-                        existing.total += itemValue;
-                    } else {
-                        invoiceItemsMap.set(key, {
-                            reference: stockItem.reference,
-                            description: stockItem.name,
-                            quantity: quantityToTake,
-                            unitPrice: stockItem.price,
-                            total: itemValue,
-                        });
+                    if (itemsToSell.length === 0) {
+                        throw new Error("تعذر إنشاء الفاتورة للمبلغ الإجمالي المحدد. قد يكون المبلغ صغيرًا جدًا بالنسبة للمخزون الحالي.");
                     }
-                }
-                
-                const finalInvoiceItems = Array.from(invoiceItemsMap.values());
-                const finalActualTotalTTC = finalActualTotalHT * (1 + VAT_RATE);
-                const targetTotalTTC = invoiceData.totalAmount;
 
-                // Step 2: Adjust invoice item prices to match the requested total
-                const differenceTTC = targetTotalTTC - finalActualTotalTTC;
-                
-                if (finalInvoiceItems.length > 0 && Math.abs(differenceTTC) > 0.001) {
-                    // Find the item with the highest total value to absorb the difference
-                    let itemToAdjust = finalInvoiceItems.reduce((prev, current) => (prev.total > current.total) ? prev : current);
+                    const invoiceItemsMap = new Map<string, InvoiceItem>();
+                    let finalActualTotalHT = 0;
+
+                    // Step 1: Deduct real stock and calculate actual totals
+                    for (const { stockItem, quantityToTake } of itemsToSell) {
+                        // Deduct from inventory using real values
+                        const updatedItem = { ...stockItem, quantity: stockItem.quantity - quantityToTake };
+                        inventoryStore.put(updatedItem); // This operation uses the real price
+
+                        const itemValue = quantityToTake * stockItem.price;
+                        finalActualTotalHT += itemValue;
+                        
+                        const key = `${stockItem.reference}::${stockItem.name}::${stockItem.price}`;
+                        const existing = invoiceItemsMap.get(key);
+                        if (existing) {
+                            existing.quantity += quantityToTake;
+                            existing.total += itemValue;
+                        } else {
+                            invoiceItemsMap.set(key, {
+                                reference: stockItem.reference,
+                                description: stockItem.name,
+                                quantity: quantityToTake,
+                                unitPrice: stockItem.price,
+                                total: itemValue,
+                            });
+                        }
+                    }
                     
-                    // The difference needs to be applied to the HT value of the item
-                    const differenceHT = differenceTTC / (1 + VAT_RATE);
+                    const finalInvoiceItems = Array.from(invoiceItemsMap.values());
+                    const finalActualTotalTTC = finalActualTotalHT * (1 + VAT_RATE);
+                    const targetTotalTTC = invoiceData.totalAmount;
 
-                    // Adjust the total and unit price of that single item for the invoice document
-                    itemToAdjust.total += differenceHT;
-                    itemToAdjust.unitPrice = itemToAdjust.total / itemToAdjust.quantity;
+                    // Step 2: Adjust invoice item prices to match the requested total
+                    const differenceTTC = targetTotalTTC - finalActualTotalTTC;
+                    
+                    if (finalInvoiceItems.length > 0 && Math.abs(differenceTTC) > 0.001) {
+                        // Find the item with the highest total value to absorb the difference
+                        let itemToAdjust = finalInvoiceItems.reduce((prev, current) => (prev.total > current.total) ? prev : current);
+                        
+                        // The difference needs to be applied to the HT value of the item
+                        const differenceHT = differenceTTC / (1 + VAT_RATE);
+
+                        // Adjust the total and unit price of that single item for the invoice document
+                        itemToAdjust.total += differenceHT;
+                        itemToAdjust.unitPrice = itemToAdjust.total / itemToAdjust.quantity;
+                    }
+
+                    // Step 3: Create the final invoice with the adjusted values
+                    const newInvoice: Omit<GeneratedInvoice, 'id'> = {
+                        invoiceNumber: invoiceData.invoiceNumber,
+                        customerName: invoiceData.customerName,
+                        invoiceDate: invoiceData.invoiceDate,
+                        totalAmount: targetTotalTTC, // Use the user's requested total
+                        items: finalInvoiceItems // Use the potentially adjusted items
+                    };
+
+                    invoiceStore.add(newInvoice);
+
+                } catch (error) {
+                    console.error("Error during invoice creation:", error);
+                    transaction.abort();
                 }
-
-                // Step 3: Create the final invoice with the adjusted values
-                const newInvoice: Omit<GeneratedInvoice, 'id'> = {
-                    invoiceNumber: invoiceData.invoiceNumber,
-                    customerName: invoiceData.customerName,
-                    invoiceDate: invoiceData.invoiceDate,
-                    totalAmount: targetTotalTTC, // Use the user's requested total
-                    items: finalInvoiceItems // Use the potentially adjusted items
-                };
-
-                invoiceStore.add(newInvoice);
-
-            } catch (error) {
-                console.error("Error during invoice creation:", error);
-                transaction.abort();
             }
-        };
-        
-        getAllRequest.onerror = () => {
-            reject(getAllRequest.error);
         };
     });
 };
