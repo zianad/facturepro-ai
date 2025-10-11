@@ -428,7 +428,7 @@ const InvoicePage: React.FC = () => {
             
             {/* View Modal */}
             {isViewModalOpen && selectedInvoice && (
-                <div className="fixed inset-0 bg-black bg-opacity-75 z-40 flex justify-center items-center p-4">
+                <div className="fixed inset-0 bg-black bg-opacity-75 z-40 flex justify-center items-center p-4 print-overlay">
                     <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in-up print-modal-container">
                         <div className="p-4 border-b flex justify-between items-center no-print">
                             <h2 className="text-xl font-bold text-gray-900">{t('invoice')} N° {selectedInvoice.invoiceNumber}</h2>
@@ -503,7 +503,7 @@ const InvoicePage: React.FC = () => {
                                   <p className="font-semibold"><span className="font-bold">{t('invoiceSumInWordsPrefix')}</span> {numberToWordsFr(selectedInvoice.totalAmount)}</p>
                                </section>
                                
-                               <footer className="mt-12 text-center text-xs text-gray-500 border-t pt-4">
+                               <footer className="mt-12 text-center text-xs text-gray-500 border-t pt-4 print-invoice-footer">
                                   <p><span className="font-bold">{t('companyName')}:</span> {profile?.companyName}</p>
                                   <p><span className="font-bold">{t('companyAddressTitle')}:</span> {profile?.companyAddress}</p>
                                </footer>

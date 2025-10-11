@@ -32,7 +32,21 @@
           display: none !important;
         }
 
-        /* Reset the modal container to un-constrain it */
+        /* Isolate the printable modal content using visibility */
+        body * {
+          visibility: hidden;
+        }
+        .print-overlay, .print-overlay * {
+          visibility: visible;
+        }
+
+        /* Reset the modal overlay and container for natural document flow */
+        .print-overlay {
+            position: static !important;
+            background: none !important;
+            padding: 0 !important;
+            display: block !important;
+        }
         .print-modal-container {
           position: static !important;
           box-shadow: none !important;
@@ -41,41 +55,37 @@
           max-width: none !important;
           max-height: none !important;
           height: auto !important;
+          display: block !important;
         }
-        /* Allow scrollable content to flow naturally across pages */
         .print-modal-content {
           overflow: visible !important;
           height: auto !important;
           padding: 0 !important;
         }
         
-        /* The standard "isolate the element" technique */
-        body * {
-          visibility: hidden;
-        }
-        #printable-invoice, #printable-invoice * {
-          visibility: visible;
-        }
         #printable-invoice {
-          position: static !important; /* CRITICAL CHANGE: Use static position for natural document flow */
-          left: auto;
-          top: auto;
+          position: static !important;
           width: 100%;
           padding: 0 !important;
           margin: 0 !important;
+          box-shadow: none !important;
         }
         
-        /* Improve table printing across pages */
+        /* Table printing rules */
         table {
-          page-break-inside: auto; /* Allow tables to break across pages */
+          page-break-inside: auto;
         }
-
         thead {
-          display: table-header-group; /* Ensures the table header repeats on each page */
+          display: table-header-group;
         }
-
         tbody tr {
-          page-break-inside: avoid; /* Prevents a table row from splitting across two pages */
+          page-break-inside: avoid;
+        }
+        
+        /* Footer stability fix */
+        .print-invoice-footer {
+            margin-top: 2rem !important;
+            page-break-inside: avoid;
         }
 
         @page {
