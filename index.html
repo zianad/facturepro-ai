@@ -32,21 +32,19 @@
           display: none !important;
         }
 
-        /* Reset the modal container to un-constrain it */
-        .print-modal-container {
+        /* Reset the modal containers to ensure they don't clip content.
+           Overriding flexbox with 'display: block' is crucial for multi-page printing. */
+        .print-modal-container, .print-modal-content {
+          display: block !important;
           position: static !important;
+          width: auto !important;
+          height: auto !important;
+          max-height: none !important;
+          overflow: visible !important;
           box-shadow: none !important;
           border: none !important;
-          width: 100% !important;
-          max-width: none !important;
-          max-height: none !important;
-          height: auto !important;
-        }
-        /* Allow scrollable content to flow naturally across pages */
-        .print-modal-content {
-          overflow: visible !important;
-          height: auto !important;
           padding: 0 !important;
+          margin: 0 !important;
         }
         
         /* The standard "isolate the element" technique */
@@ -57,17 +55,15 @@
           visibility: visible;
         }
         #printable-invoice {
-          position: absolute; /* Use absolute to place it at the top of the page */
+          position: absolute;
           left: 0;
           top: 0;
           width: 100%;
-          padding: 0 !important;
-          margin: 0 !important;
         }
         
         /* Improve table printing across pages */
         table {
-          page-break-inside: auto; /* Allow tables to break across pages */
+          page-break-inside: auto;
         }
 
         thead {
@@ -83,6 +79,7 @@
           margin: 1.6cm;
         }
         body {
+         margin: 0;
          -webkit-print-color-adjust: exact !important; /* For Chrome, Safari */
          print-color-adjust: exact !important; /* For Firefox */
         }
