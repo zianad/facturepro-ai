@@ -482,26 +482,28 @@ const InvoicePage: React.FC = () => {
                                    </table>
                                </section>
                                
-                               <section className="flex justify-end mb-8">
-                                    <div className="w-full max-w-sm text-gray-700">
-                                        <div className="flex justify-between border-b border-gray-300 py-2">
-                                            <span className="font-semibold">{t('totalHTBox')}</span>
-                                            <span style={numberStyle}>{formatCurrencyFr(selectedInvoice.totalAmount / 1.2)} DH</span>
+                               <div className="totals-group">
+                                   <section className="flex justify-end mb-8">
+                                        <div className="w-full max-w-sm text-gray-700">
+                                            <div className="flex justify-between border-b border-gray-300 py-2">
+                                                <span className="font-semibold">{t('totalHTBox')}</span>
+                                                <span style={numberStyle}>{formatCurrencyFr(selectedInvoice.totalAmount / 1.2)} DH</span>
+                                            </div>
+                                             <div className="flex justify-between border-b border-gray-300 py-2">
+                                                <span className="font-semibold">{t('mtva')}</span>
+                                                <span style={numberStyle}>{formatCurrencyFr(selectedInvoice.totalAmount - (selectedInvoice.totalAmount / 1.2))} DH</span>
+                                            </div>
+                                             <div className="flex justify-between font-bold text-lg bg-gray-100 p-3 mt-2 rounded-md">
+                                                <span>{t('totalTTCBox')}</span>
+                                                <span style={numberStyle}>{formatCurrencyFr(selectedInvoice.totalAmount)} DH</span>
+                                            </div>
                                         </div>
-                                         <div className="flex justify-between border-b border-gray-300 py-2">
-                                            <span className="font-semibold">{t('mtva')}</span>
-                                            <span style={numberStyle}>{formatCurrencyFr(selectedInvoice.totalAmount - (selectedInvoice.totalAmount / 1.2))} DH</span>
-                                        </div>
-                                         <div className="flex justify-between font-bold text-lg bg-gray-100 p-3 mt-2 rounded-md">
-                                            <span>{t('totalTTCBox')}</span>
-                                            <span style={numberStyle}>{formatCurrencyFr(selectedInvoice.totalAmount)} DH</span>
-                                        </div>
-                                    </div>
-                               </section>
+                                   </section>
 
-                               <section className="mb-8 p-4 bg-gray-50 rounded-md">
-                                  <p className="font-semibold"><span className="font-bold">{t('invoiceSumInWordsPrefix')}</span> {numberToWordsFr(selectedInvoice.totalAmount)}</p>
-                               </section>
+                                   <section className="mb-8 p-4 bg-gray-50 rounded-md">
+                                      <p className="font-semibold"><span className="font-bold">{t('invoiceSumInWordsPrefix')}</span> {numberToWordsFr(selectedInvoice.totalAmount)}</p>
+                                   </section>
+                               </div>
                                
                                <footer className="mt-12 text-center text-xs text-gray-500 border-t pt-4">
                                   <p><span className="font-bold">{t('companyName')}:</span> {profile?.companyName}</p>
