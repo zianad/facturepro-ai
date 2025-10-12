@@ -32,9 +32,10 @@
           display: none !important;
         }
 
-        /* Reset the modal containers to ensure they don't clip content.
-           Overriding flexbox with 'display: block' is crucial for multi-page printing. */
-        .print-modal-container, .print-modal-content {
+        /* Reset all modal wrappers to ensure they don't clip content.
+           Even though they become 'visibility: hidden', their layout properties
+           can still constrain the printable area. This ensures they don't. */
+        .print-modal-root, .print-modal-container, .print-modal-content {
           display: block !important;
           position: static !important;
           width: auto !important;
@@ -45,15 +46,19 @@
           border: none !important;
           padding: 0 !important;
           margin: 0 !important;
+          background: none !important; /* Also remove background */
         }
         
-        /* The standard "isolate the element" technique */
+        /* The standard "isolate the element" technique. This hides everything
+           except for the #printable-invoice element and its children. */
         body * {
           visibility: hidden;
         }
         #printable-invoice, #printable-invoice * {
           visibility: visible;
         }
+        /* Position the printable area at the top of the page. This is key
+           to making it the only thing the print renderer processes for layout. */
         #printable-invoice {
           position: absolute;
           left: 0;
