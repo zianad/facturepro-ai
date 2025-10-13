@@ -252,49 +252,82 @@ const InvoicePage: React.FC = () => {
         window.print();
     };
 
-    const handleDownloadPdf = () => {
-        const input = document.getElementById('printable-invoice');
-        if (!input) return;
-
-        const modalContent = input.parentElement as HTMLElement;
-        const modalContainer = modalContent?.parentElement as HTMLElement;
-        if (!modalContent || !modalContainer) return;
-
-        // Store original styles
-        const originalModalContentStyle = modalContent.style.cssText;
-        const originalModalContainerStyle = modalContainer.style.cssText;
-
-        // Temporarily override modal styles to ensure the full content is rendered for capture
-        modalContent.style.overflow = 'visible';
+    const handleDownloadPdf = async () => {
+        const invoiceElement = document.getElementById('printable-invoice');
+        if (!invoiceElement) return;
+    
+        const modalContainer = invoiceElement.closest('.print-modal-container') as HTMLElement;
+        if (!modalContainer) return;
+    
+        const originalModalStyle = modalContainer.getAttribute('style');
+    
+        // Temporarily make the modal container full-height so html2canvas can see all of it.
         modalContainer.style.maxHeight = 'none';
         modalContainer.style.overflow = 'visible';
-
-        const pdf = new jsPDF({
-            orientation: 'p',
-            unit: 'mm',
-            format: 'a4',
-        });
-
-        const margin = 15; // 1.5cm margin
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const contentWidth = pdfWidth - (margin * 2);
-
-        pdf.html(input, {
-            callback: (doc) => {
-                // Restore original styles right after PDF is generated and before saving
-                modalContent.style.cssText = originalModalContentStyle;
-                modalContainer.style.cssText = originalModalContainerStyle;
-                doc.save(`facture-${selectedInvoice?.invoiceNumber}.pdf`);
-            },
-            margin: margin,
-            autoPaging: 'text', // Key option to prevent text splitting
-            width: contentWidth, // Define the width of the content area in the PDF
-            windowWidth: input.scrollWidth, // Tell html2canvas the source element's width
-            html2canvas: {
-                scale: 2, // Higher scale for better image quality
+        
+        const scrollableContent = invoiceElement.closest('.print-modal-content') as HTMLElement;
+        if(scrollableContent) scrollableContent.scrollTop = 0;
+    
+        try {
+            const canvas = await html2canvas(invoiceElement, {
+                scale: 2, // Use a higher scale for better resolution
                 useCORS: true,
+                logging: false,
+            });
+    
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const margin = 15; // 1.5cm margin
+            const pdfWidth = pdf.internal.pageSize.getWidth() - (margin * 2);
+            const pdfHeight = pdf.internal.pageSize.getHeight() - (margin * 2);
+    
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+            
+            // Calculate the ratio to fit the canvas width to the PDF content width
+            const ratio = pdfWidth / imgWidth;
+            const scaledImgHeight = imgHeight * ratio;
+    
+            // Calculate how many pages are needed
+            const numPages = Math.ceil(scaledImgHeight / pdfHeight);
+    
+            for (let i = 0; i < numPages; i++) {
+                if (i > 0) {
+                    pdf.addPage();
+                }
+                // The y-position in the source canvas to start the crop from
+                const srcY = (pdfHeight / ratio) * i;
+                // The height of the crop from the source canvas
+                const srcHeight = Math.min(imgHeight - srcY, pdfHeight / ratio);
+    
+                // Create a temporary canvas for the slice
+                const sliceCanvas = document.createElement('canvas');
+                sliceCanvas.width = imgWidth;
+                sliceCanvas.height = srcHeight;
+                const sliceCtx = sliceCanvas.getContext('2d');
+    
+                // Draw the slice from the main canvas onto the temporary canvas
+                if (sliceCtx) {
+                    sliceCtx.drawImage(canvas, 0, srcY, imgWidth, srcHeight, 0, 0, imgWidth, srcHeight);
+                }
+                
+                // Add the temporary canvas slice as an image to the PDF
+                const pageData = sliceCanvas.toDataURL('image/png', 1.0);
+                pdf.addImage(pageData, 'PNG', margin, margin, pdfWidth, (srcHeight * ratio));
             }
-        });
+            
+            pdf.save(`facture-${selectedInvoice?.invoiceNumber}.pdf`);
+    
+        } catch (error) {
+            console.error('PDF generation failed:', error);
+            alert("An error occurred during PDF generation.");
+        } finally {
+            // Restore the original modal styles
+            if (originalModalStyle) {
+                modalContainer.setAttribute('style', originalModalStyle);
+            } else {
+                modalContainer.removeAttribute('style');
+            }
+        }
     };
 
 
