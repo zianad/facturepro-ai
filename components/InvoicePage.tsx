@@ -7,9 +7,9 @@ import { GeneratedInvoice, ProfileData, InvoiceItem } from '../types';
 import { initDB, getAllInvoices, deleteInvoiceAndRestock, createInvoiceFromTotal, getProfile, getAvailableInventoryValue, clearAllInvoicesAndRestock } from '../db';
 
 // --- Icons ---
-const Spinner = () => <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
+const Spinner = () => <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
-const EyeIcon = () => <svg xmlns="http://www.w.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>;
+const EyeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>;
 const PrintIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v3a2 2 0 002 2h8a2 2 0 002-2v-3h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" /></svg>;
 const PdfIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm5 1a1 1 0 00-1 1v1a1 1 0 001 1h2a1 1 0 001-1V6a1 1 0 00-1-1H9z" clipRule="evenodd" /><path d="M15 12H5a1 1 0 000 2h10a1 1 0 000-2z" /></svg>;
 const WordIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm4.293 4.293a1 1 0 011.414 0L12 10.586l2.293-2.293a1 1 0 111.414 1.414L13.414 12l2.293 2.293a1 1 0 01-1.414 1.414L12 13.414l-2.293 2.293a1 1 0 01-1.414-1.414L10.586 12 8.293 9.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>;
@@ -258,55 +258,42 @@ const InvoicePage: React.FC = () => {
 
         const modalContent = input.parentElement as HTMLElement;
         const modalContainer = modalContent?.parentElement as HTMLElement;
-
         if (!modalContent || !modalContainer) return;
 
-        // Store original styles to restore them later
+        // Store original styles
         const originalModalContentStyle = modalContent.style.cssText;
         const originalModalContainerStyle = modalContainer.style.cssText;
 
-        // Temporarily override modal styles to ensure html2canvas captures the full content
+        // Temporarily override modal styles to ensure the full content is rendered for capture
         modalContent.style.overflow = 'visible';
         modalContainer.style.maxHeight = 'none';
         modalContainer.style.overflow = 'visible';
 
-        html2canvas(input, {
-            scale: 2, // Improves quality
-            useCORS: true,
-        }).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF({
-                orientation: 'p',
-                unit: 'mm',
-                format: 'a4'
-            });
+        const pdf = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: 'a4',
+        });
 
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            
-            const imgProps = pdf.getImageProperties(imgData);
-            const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        const margin = 15; // 1.5cm margin
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const contentWidth = pdfWidth - (margin * 2);
 
-            let heightLeft = imgHeight;
-            let position = 0;
-
-            // Add the first page
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-            heightLeft -= pdfHeight;
-
-            // Add subsequent pages if the content is long
-            while (heightLeft > 0) {
-                position -= pdfHeight; // Move the image "up" on the new page
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-                heightLeft -= pdfHeight;
+        pdf.html(input, {
+            callback: (doc) => {
+                // Restore original styles right after PDF is generated and before saving
+                modalContent.style.cssText = originalModalContentStyle;
+                modalContainer.style.cssText = originalModalContainerStyle;
+                doc.save(`facture-${selectedInvoice?.invoiceNumber}.pdf`);
+            },
+            margin: margin,
+            autoPaging: 'text', // Key option to prevent text splitting
+            width: contentWidth, // Define the width of the content area in the PDF
+            windowWidth: input.scrollWidth, // Tell html2canvas the source element's width
+            html2canvas: {
+                scale: 2, // Higher scale for better image quality
+                useCORS: true,
             }
-            
-            pdf.save(`facture-${selectedInvoice?.invoiceNumber}.pdf`);
-        }).finally(() => {
-             // CRITICAL: Restore the original styles after capture is complete
-            modalContent.style.cssText = originalModalContentStyle;
-            modalContainer.style.cssText = originalModalContainerStyle;
         });
     };
 
